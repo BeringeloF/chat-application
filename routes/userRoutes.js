@@ -1,0 +1,27 @@
+import express from "express";
+import * as userController from "../controllers/userController.js";
+import * as authController from "../controllers/authController.js";
+
+export const router = express.Router();
+
+router.get("/", userController.getAllUsers);
+
+router.post("/login", authController.login);
+
+router.get("/logout", authController.logout);
+
+router.get("/getMe", authController.protect, userController.getMe);
+
+router.post('/group', authController.protect, userController.createGroup)
+
+router
+  .route("/notifications")
+  .get(authController.protect, userController.getNotifications);
+
+router.delete(
+  "/notifications/:triggeredById",
+  authController.protect,
+  userController.markNotificationsAsVisualized
+);
+
+router.route("/:userId").get(userController.getUser);

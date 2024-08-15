@@ -1,0 +1,197 @@
+import User from "../db/userModel.js";
+import Redis from "ioredis";
+import { AppError } from "../helpers/appError.js";
+import generateTemplate from "../helpers/generateTemplate.js";
+
+const redis = new Redis();
+redis.on("error", (err) => {
+  console.error("Erro ao conectar ao Redis:", err);
+});
+
+const createAndSendNotification = async (
+  userId,
+  targetUserId,
+  io,
+  room,
+  msg
+) => {
+  let userObj = await redis.get(targetUserId);
+  userObj = userObj && (await JSON.parse(userObj));
+
+  if (!userObj)
+    return new AppError("this user was not found on redis!", 404)
+
+  const triggeredByUser = await User.findById(userId);
+  const notificationObj = {
+    room,
+    preview: msg.slice(0, 22),
+    sendAt: Date.now(),
+    triggeredBy: triggeredByUser,
+    targetUserId,
+    totalMessages: 1,
+  };
+
+  console.log(userObj, targetUserId);
+
+  //if there is alredy a notification triggeredBy the same user we just incresse the totalMessages propertie and, replace the existing obj
+  //by this new one
+
+  const notificationIndex = userObj.notifications.findIndex(
+    (el) =>
+      el.triggeredBy._id.toString() ===
+      notificationObj.triggeredBy._id.toString()
+  );
+  console.log(notificationIndex);
+
+  if (notificationIndex !== -1) {
+    notificationObj.totalMessages =
+      userObj.notifications[notificationIndex].totalMessages + 1;
+    userObj.notifications[notificationIndex] = notificationObj;
+  } else {
+    userObj.notifications.push(notificationObj);
+  }
+  //saving the target userObj with the newest notification
+  await redis.set(targetUserId, JSON.stringify(userObj));
+  io.to(targetUserId)
+    .timeout(5000)
+    .emitWithAck("notification", notificationObj);
+};
+
+// Armazenar salas nas quais o socket está inscrito
+
+export const joinToRoom = (room, joinedRooms, socket, callback) => {
+  if (!joinedRooms.has(room)) {
+    socket.join(room);
+    joinedRooms.add(room);
+    console.log(`Usuário ${socket.id} inscrito na sala ${room}`);
+    if (callback) callback({ status: "joined" });
+
+    return true;
+  } else {
+    console.log(`Usuário ${socket.id} já está inscrito na sala ${room}`);
+    if (callback) callback({ status: "alredy joined" });
+  }
+};
+
+const getOrSetValues = async (userId, targetUserId) => {
+  try {
+    // Usar await para obter os valores
+    const roomOneIsNotEmpty = await redis.get(`${userId}-${targetUserId}`);
+    const roomTwoIsNotEmpty = await redis.get(`${targetUserId}-${userId}`);
+
+    console.log("possiveis rooms", roomOneIsNotEmpty, roomTwoIsNotEmpty);
+
+    let data, room;
+
+    if (roomOneIsNotEmpty) {
+      room = `${userId}-${targetUserId}`;
+      data = JSON.parse(roomOneIsNotEmpty);
+    } else if (roomTwoIsNotEmpty) {
+      room = `${targetUserId}-${userId}`;
+      data = JSON.parse(roomTwoIsNotEmpty);
+    } else {
+      room = `${userId}-${targetUserId}`;
+      const roomObj = {
+        messages: [],
+      };
+      await redis.set(room, JSON.stringify(roomObj));
+      console.log("Novo room criado e salvo.");
+    }
+
+    // Continue com a lógica após a operação Redis
+    console.log("Room:", room);
+    console.log("Data:", data);
+    return [room, data];
+  } catch (err) {
+    console.error("Erro ao obter valores ou definir chave:", err);
+  }
+};
+
+//function to be executed on the chat emiter
+export const onChat = (socket, io, userId) => {
+  return async (msg, targetUserId, callback) => {
+    if (userId.toString() === targetUserId) return;
+
+    let room;
+    try {
+      [room] = await getOrSetValues(userId, targetUserId);
+
+      console.log("message: " + msg);
+      //sending message
+      const res = await socket.broadcast
+        .to(room)
+        .timeout(5000)
+        .emitWithAck("chat", msg);
+      console.log('RESPOSTA:', res)
+      redis.get(room, async (err, reply) => {
+        if (err) {
+          console.error("Erro ao obter o valor:", err);
+        }
+        const roomObj = reply && JSON.parse(reply);
+        const message = {
+          content: msg,
+          sendAt: Date.now(),
+          sendBy: userId,
+          messageIndex: roomObj.messages.length,
+        };
+        if (!res[0]?.arrived) {
+          createAndSendNotification(userId, targetUserId, io, room, msg);
+        }
+
+        roomObj.messages.push(message);
+        redis.set(room, JSON.stringify(roomObj));
+      });
+
+      callback({ status: "ok" });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+};
+
+export const onChatWith = (socket, io, userId, joinedRooms) => {
+  return async (targetUserId, callback) => {
+    //verify if the users with the given ids exist
+    try {
+      [...joinedRooms].filter((room) => {
+        if (room.includes('-')) {
+          joinedRooms.delete(room);
+          socket.leave(room)
+        }
+      });
+      const targetUser = await User.findById(targetUserId);
+
+      if (!targetUser) throw new AppError("could not find this user!", 404);
+
+      if (userId.toString() === targetUserId) return;
+
+      //if it's the first time they are chating
+
+      const [room, data] = await getOrSetValues(userId, targetUserId);
+
+      //create room for them
+      if (joinToRoom(room, joinedRooms, socket)) {
+        callback({
+          status: "joined",
+          data: data && generateTemplate(data.messages, userId),
+        });
+      } else {
+        callback({
+          status: "alredy joined",
+          data: data && generateTemplate(data.messages, userId),
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+};
+
+export const onJoin = (socket, joinedRooms) => {
+  return (room, callback) => {
+    joinToRoom(room, joinedRooms, socket, callback);
+  };
+};
+
+

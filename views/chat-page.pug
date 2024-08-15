@@ -1,0 +1,42 @@
+
+mixin notificationCard(img, name, msgNum, msg)
+ .notification-card
+      .user-photo
+        img(src=`/img/users/${img}` alt="User Photo")
+      .notification-content
+        .user-info
+          p.user-name= name
+          p.message-count #{msgNum} mensagens
+        p.last-message-preview= msg
+
+doctype hmtl 
+html(lang="en")
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title Chat App
+    link(rel="stylesheet" href="/css/style.css")
+    script( defer src="/dist/index.js")
+  body
+    .container
+      aside.sidebar
+        .user-profile
+          .user-main
+            img.user-avatar(src=`/img/users/${user.photo}`)
+            .user-name= user.name.split(' ')[0]
+          input(type="text" class="search-bar" placeholder="Buscar...")
+        .search-results
+        ul.user-list
+          each userT in users
+            li.user-item(data-user-id=`${userT._id}`)
+              img.user-avatar(src=`/img/users/${userT.photo}`)
+              .user-name= userT.name.split(' ')[0]
+              .user-message-preview Lorem ipsum dolor sit amet...
+            //- Outros usuários
+      .main-content
+        .chat-header
+          
+        .chat-box
+         
+        
+   

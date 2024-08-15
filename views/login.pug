@@ -1,0 +1,18 @@
+doctype html
+html(lang="pt-br")
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title Login - Chat App
+    link(rel="stylesheet" href="/css/style.css")
+    script( defer src="/dist/index.js") 
+  body
+    #login-page
+      #login-container
+        h1#login-title Login
+        form#login-form
+          input(type="email" class="login-input" id="email" placeholder="Email" required)
+          input(type="password" class="login-input" id="password" placeholder="Senha" required value="test1234")
+          button(type="submit" id="login-button") Entrar
+        a(href="#" id="login-signup-link") Não tem uma conta? Cadastre-se
+
