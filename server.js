@@ -25,7 +25,7 @@ mongoose.connect(DB).then(() => {
       socket.on("join", onJoin(socket, joinedRooms));
       socket.on("chat", onChat(socket, io, userId));
       socket.on("chat with", onChatWith(socket, io, userId, joinedRooms));
-      socket.on('createGroup', onCreateGroup(socket, io, userId, joinedRooms))
+     
      
     });
     socket.on("disconnect", () => {

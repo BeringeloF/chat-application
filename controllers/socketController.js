@@ -18,8 +18,7 @@ const createAndSendNotification = async (
   let userObj = await redis.get(targetUserId);
   userObj = userObj && (await JSON.parse(userObj));
 
-  if (!userObj)
-    return new AppError("this user was not found on redis!", 404)
+  if (!userObj) return new AppError("this user was not found on redis!", 404);
 
   const triggeredByUser = await User.findById(userId);
   const notificationObj = {
@@ -75,6 +74,9 @@ export const joinToRoom = (room, joinedRooms, socket, callback) => {
 
 const getOrSetValues = async (userId, targetUserId) => {
   try {
+    if (!userId || !targetUserId)
+      throw new AppError("some of the provided id is invalid!", 400);
+
     // Usar await para obter os valores
     const roomOneIsNotEmpty = await redis.get(`${userId}-${targetUserId}`);
     const roomTwoIsNotEmpty = await redis.get(`${targetUserId}-${userId}`);
@@ -122,7 +124,7 @@ export const onChat = (socket, io, userId) => {
         .to(room)
         .timeout(5000)
         .emitWithAck("chat", msg);
-      console.log('RESPOSTA:', res)
+      console.log("RESPOSTA:", res);
       redis.get(room, async (err, reply) => {
         if (err) {
           console.error("Erro ao obter o valor:", err);
@@ -154,9 +156,9 @@ export const onChatWith = (socket, io, userId, joinedRooms) => {
     //verify if the users with the given ids exist
     try {
       [...joinedRooms].filter((room) => {
-        if (room.includes('-')) {
+        if (room.includes("-")) {
           joinedRooms.delete(room);
-          socket.leave(room)
+          socket.leave(room);
         }
       });
       const targetUser = await User.findById(targetUserId);
@@ -193,5 +195,3 @@ export const onJoin = (socket, joinedRooms) => {
     joinToRoom(room, joinedRooms, socket, callback);
   };
 };
-
-

@@ -2,6 +2,7 @@ import User from "../db/userModel.js";
 import catchAsync from "../helpers/catchAsync.js";
 import { AppError } from "../helpers/appError.js";
 import Redis from "ioredis";
+import multer from "multer";
 
 const redis = new Redis();
 redis.on("error", (err) => {
@@ -74,17 +75,44 @@ export const markNotificationsAsVisualized = catchAsync(
   }
 );
 
+//Este filtro serve pra garantir que os unicos files que estao sendo carregados sao imagens
+const multerFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("image")) {
+    cb(null, true);
+  } else {
+    cb(new AppError("Not an image!, please upload only images", 400), false);
+  }
+};
+
+//Agora para salvar apenas na memoria com um buffer nos fazer assim
+//Entao a imagem estara salva em req.file.buffer
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "./public/img/group-images/"); // Pasta onde os arquivos serão salvos
+  },
+  filename: (req, file, cb) => {
+    cb(null, `group-image-${Date.now()}-${path.extname(file.originalname)}`);
+  },
+});
+
+const upload = multer({
+  storage: storage,
+  fileFilter: multerFilter,
+});
+
+export const uploadGroupImage = upload.single("image");
 
 export const createGroup = catchAsync(async (req, res, next) => {
-  const date = Date.now()
-  const room = `${req.user._id.toString()}-${date}`
+  const date = Date.now();
+  const room = `${req.user._id.toString()}-${date}`;
   const roomObj = {
-      name: req.body.groupName,
-      imageCover: req.body.img,
-      messages: [],
-      participants: [],
-      createdBy: req.user._id.toString(),
-      createdAt: date
-    }
-    redis.set(room, JSON.stringify(roomObj))
-})
+    name: req.body.name,
+    imageCover: req.file.filename,
+    messages: [],
+    participants: [...req.body.participants.trim().split(" ")],
+    createdBy: req.user._id.toString(),
+    createdAt: date,
+  };
+  await redis.set(room, JSON.stringify(roomObj));
+});

@@ -24,6 +24,7 @@ html(lang="en")
           .user-main
             img.user-avatar(src=`/img/users/${user.photo}`)
             .user-name= user.name.split(' ')[0]
+            img.create-group-icon(src="/img/icons/create-group-icon.png")
           input(type="text" class="search-bar" placeholder="Buscar...")
         .search-results
         ul.user-list

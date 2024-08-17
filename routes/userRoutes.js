@@ -12,7 +12,12 @@ router.get("/logout", authController.logout);
 
 router.get("/getMe", authController.protect, userController.getMe);
 
-router.post('/group', authController.protect, userController.createGroup)
+router.post(
+  "/group",
+  authController.protect,
+  userController.uploadGroupImage,
+  userController.createGroup
+);
 
 router
   .route("/notifications")
