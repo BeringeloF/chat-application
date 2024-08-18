@@ -25,6 +25,10 @@ html(lang="en")
             img.user-avatar(src=`/img/users/${user.photo}`)
             .user-name= user.name.split(' ')[0]
             img.create-group-icon(src="/img/icons/create-group-icon.png")
+            .notification-icon
+              span#notification-count.notification-count 0
+              i.bell-icon &#x1F514;
+
           input(type="text" class="search-bar" placeholder="Buscar...")
         .search-results
         ul.user-list

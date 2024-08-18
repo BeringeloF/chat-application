@@ -20,6 +20,10 @@ router.post(
 );
 
 router
+  .route("/group/:room")
+  .patch(authController.protect, userController.joinToGroup);
+
+router
   .route("/notifications")
   .get(authController.protect, userController.getNotifications);
 

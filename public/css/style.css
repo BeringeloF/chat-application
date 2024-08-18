@@ -404,3 +404,30 @@ body {
 .add-contact-btn:hover {
   background-color: #218838;
 }
+
+.notification-icon {
+  margin-left: 5px;
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.bell-icon {
+  font-size: 20px;
+}
+
+.notification-count {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 12px;
+  display: none; /* Inicialmente escondido */
+}
+
+.notification-count.show {
+  display: inline; /* Exibe o número quando houver notificações */
+}

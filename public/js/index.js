@@ -1,3 +1,4 @@
+import { createGroup } from "./createGroup.js";
 import { login } from "./login.js";
 import { viewNotification } from "./markNotificationsAsVisualized.js";
 import io from "socket.io-client";
@@ -53,32 +54,10 @@ async function sendMessage(e) {
 
   console.log("notifications:", data);
 
-  if (data.notifications) {
-    const list = document.querySelector(".user-list");
-    const notifications = data.notifications;
-    const markup = notifications
-      .map((el) => {
-        const userItem = document.querySelector(
-          `.user-item[data-user-id="${el.triggeredBy._id}"]`
-        );
-
-        if (userItem) list.removeChild(userItem);
-
-        return `
-    <li class="user-item" data-user-id="${el.triggeredBy._id}">
-   <img class="user-avatar" src="/img/users/${
-     el.triggeredBy.photo
-   }" alt="User Avatar">
-   <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
-    <p class="message-count">${el.totalMessages}</p>
-   <p class="user-message-preview">${el.preview}</p>
- </li>
-     `;
-      })
-      .join("");
-
-    list.insertAdjacentHTML("afterbegin", markup);
-  }
+  if (data.chatNotifications.length > 0)
+    renderChatNotifications(data.chatNotifications);
+  if (data.serverNotifications.length > 0)
+    updateServerNotificationsCount(data.serverNotifications.length);
 })();
 
 socket.on("chat", (msg, callback) => {
@@ -103,7 +82,7 @@ socket.on("inviteToRoom", async (room) => {
   console.log("invite to room was emited");
 });
 
-socket.on("notification", (notification, callback) => {
+socket.on("ChatNotification", (notification, callback) => {
   const markup = `
    <li class="user-item" data-user-id="${notification.triggeredBy._id}">
   <img class="user-avatar" src="/img/users/${
@@ -243,16 +222,55 @@ openCreateFormBtn.addEventListener("click", (e) => {
   listContainer.addEventListener("click", (e) => {
     if (!e.target.classList.contains("add-contact-btn")) return;
     const btn = e.target;
-    const id = btn.closest("li").data.userId;
-    btn.textContent = "Added";
+    if (!btn.classList.contains("clicked")) {
+      btn.classList.add("clicked");
+      const id = btn.closest("li").data.userId;
+      btn.textContent = "Added";
 
-    const participants = main.querySelector("#hidden-input");
+      const participants = main.querySelector("#hidden-input");
 
-    participants.value += ` ${id}`;
+      participants.value += ` ${id}`;
+    } else {
+      const participants = main.querySelector("#hidden-input");
+      const participantsArray = participants.value.trim().split(" ");
+      const id = btn.closest("li").data.userId;
+      const index = participantsArray.findIndex((el) => el === id);
+      participantsArray.splice(index, 1);
+      participants.value = participantsArray.join(" ");
+      btn.classList.remove("clicked");
+      btn.textContent = "+";
+    }
   });
   const createGroupForm = main.querySelector(".create-group-form");
-  createGroupForm.addEventListener("submit", (e) => {
+  createGroupForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const formData = new FormData(createGroupForm);
+    createGroup(formData);
   });
 });
+
+function renderChatNotifications(notifications) {
+  const list = document.querySelector(".user-list");
+  const markup = notifications
+    .map((el) => {
+      const userItem = document.querySelector(
+        `.user-item[data-user-id="${el.triggeredBy._id}"]`
+      );
+
+      if (userItem) list.removeChild(userItem);
+
+      return `
+    <li class="user-item" data-user-id="${el.triggeredBy._id}">
+   <img class="user-avatar" src="/img/users/${
+     el.triggeredBy.photo
+   }" alt="User Avatar">
+   <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
+    <p class="message-count">${el.totalMessages}</p>
+   <p class="user-message-preview">${el.preview}</p>
+ </li>
+     `;
+    })
+    .join("");
+
+  list.insertAdjacentHTML("afterbegin", markup);
+}

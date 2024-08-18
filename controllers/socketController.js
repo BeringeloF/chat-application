@@ -2,59 +2,63 @@ import User from "../db/userModel.js";
 import Redis from "ioredis";
 import { AppError } from "../helpers/appError.js";
 import generateTemplate from "../helpers/generateTemplate.js";
+import getUserObj from "../helpers/getUserObj.js";
 
 const redis = new Redis();
 redis.on("error", (err) => {
   console.error("Erro ao conectar ao Redis:", err);
 });
 
-const createAndSendNotification = async (
+const createAndSendChatNotification = async (
   userId,
   targetUserId,
   io,
   room,
   msg
 ) => {
-  let userObj = await redis.get(targetUserId);
-  userObj = userObj && (await JSON.parse(userObj));
+  try {
+    const userObj = await getUserObj(targetUserId);
 
-  if (!userObj) return new AppError("this user was not found on redis!", 404);
+    const triggeredByUser = await User.findById(userId);
+    const notificationObj = {
+      room,
+      preview: msg.slice(0, 22),
+      sendedAt: Date.now(),
+      triggeredBy: triggeredByUser,
+      targetUserId,
+      totalMessages: 1,
+    };
 
-  const triggeredByUser = await User.findById(userId);
-  const notificationObj = {
-    room,
-    preview: msg.slice(0, 22),
-    sendAt: Date.now(),
-    triggeredBy: triggeredByUser,
-    targetUserId,
-    totalMessages: 1,
-  };
+    console.log(userObj, targetUserId);
 
-  console.log(userObj, targetUserId);
+    //if there is alredy a notification triggeredBy the same user we just incresse the totalMessages propertie and, replace the existing obj
+    //by this new one
 
-  //if there is alredy a notification triggeredBy the same user we just incresse the totalMessages propertie and, replace the existing obj
-  //by this new one
+    const notificationIndex = userObj.chatNotifications.findIndex(
+      (el) =>
+        el.triggeredBy._id.toString() ===
+        notificationObj.triggeredBy._id.toString()
+    );
+    console.log(notificationIndex);
 
-  const notificationIndex = userObj.notifications.findIndex(
-    (el) =>
-      el.triggeredBy._id.toString() ===
-      notificationObj.triggeredBy._id.toString()
-  );
-  console.log(notificationIndex);
-
-  if (notificationIndex !== -1) {
-    notificationObj.totalMessages =
-      userObj.notifications[notificationIndex].totalMessages + 1;
-    userObj.notifications[notificationIndex] = notificationObj;
-  } else {
-    userObj.notifications.push(notificationObj);
+    if (notificationIndex !== -1) {
+      notificationObj.totalMessages =
+        userObj.chatNotifications[notificationIndex].totalMessages + 1;
+      userObj.chatNotifications[notificationIndex] = notificationObj;
+    } else {
+      userObj.chatNotifications.push(notificationObj);
+    }
+    //saving the target userObj with the newest notification
+    await redis.set(targetUserId, JSON.stringify(userObj));
+    io.to(targetUserId)
+      .timeout(5000)
+      .emitWithAck("chatNotification", notificationObj);
+  } catch (err) {
+    console.error("ERROR MINE", err);
   }
-  //saving the target userObj with the newest notification
-  await redis.set(targetUserId, JSON.stringify(userObj));
-  io.to(targetUserId)
-    .timeout(5000)
-    .emitWithAck("notification", notificationObj);
 };
+
+const createAndSendServerNotification = () => {};
 
 // Armazenar salas nas quais o socket está inscrito
 
@@ -78,8 +82,8 @@ const getOrSetValues = async (userId, targetUserId) => {
       throw new AppError("some of the provided id is invalid!", 400);
 
     // Usar await para obter os valores
-    const roomOneIsNotEmpty = await redis.get(`${userId}-${targetUserId}`);
-    const roomTwoIsNotEmpty = await redis.get(`${targetUserId}-${userId}`);
+    const roomOneIsNotEmpty = await redis.get(`CHAT-${userId}-${targetUserId}`);
+    const roomTwoIsNotEmpty = await redis.get(`CHAT-${targetUserId}-${userId}`);
 
     console.log("possiveis rooms", roomOneIsNotEmpty, roomTwoIsNotEmpty);
 
@@ -92,7 +96,7 @@ const getOrSetValues = async (userId, targetUserId) => {
       room = `${targetUserId}-${userId}`;
       data = JSON.parse(roomTwoIsNotEmpty);
     } else {
-      room = `${userId}-${targetUserId}`;
+      room = `CHAT-${userId}-${targetUserId}`;
       const roomObj = {
         messages: [],
       };
@@ -137,7 +141,7 @@ export const onChat = (socket, io, userId) => {
           messageIndex: roomObj.messages.length,
         };
         if (!res[0]?.arrived) {
-          createAndSendNotification(userId, targetUserId, io, room, msg);
+          createAndSendChatNotification(userId, targetUserId, io, room, msg);
         }
 
         roomObj.messages.push(message);
@@ -193,5 +197,30 @@ export const onChatWith = (socket, io, userId, joinedRooms) => {
 export const onJoin = (socket, joinedRooms) => {
   return (room, callback) => {
     joinToRoom(room, joinedRooms, socket, callback);
+  };
+};
+
+export const onIssueInvitations = (socket, io, userId) => {
+  return async (participants, room) => {
+    try {
+      await Promise.all([
+        ...participants.map(async (el) => {
+          const notification = {
+            triggeredBy: userId,
+            context: "invite to group",
+            room,
+            sendedAt: Date.now(),
+            targetUserId: el.user,
+          };
+          const userObj = await getUserObj(el.user);
+          userObj.serverNotifications.push(notification);
+          await redis.set(el.user, JSON.stringify(userObj));
+          io.emit("serverNotification", notification);
+        }),
+      ]);
+    } catch (err) {
+      console.error("ERROR MINE", err);
+      socket.emit("appError", err);
+    }
   };
 };

@@ -585,6 +585,7 @@ function hmrAccept(bundle /*: ParcelRequire */ , id /*: string */ ) {
 
 },{}],"f2QDv":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+var _createGroupJs = require("./createGroup.js");
 var _loginJs = require("./login.js");
 var _markNotificationsAsVisualizedJs = require("./markNotificationsAsVisualized.js");
 var _socketIoClient = require("socket.io-client");
@@ -627,23 +628,8 @@ async function sendMessage(e) {
     const notifiRes = await fetch("/api/v1/users/notifications");
     const { data } = await notifiRes.json();
     console.log("notifications:", data);
-    if (data.notifications) {
-        const list = document.querySelector(".user-list");
-        const notifications = data.notifications;
-        const markup = notifications.map((el)=>{
-            const userItem = document.querySelector(`.user-item[data-user-id="${el.triggeredBy._id}"]`);
-            if (userItem) list.removeChild(userItem);
-            return `
-    <li class="user-item" data-user-id="${el.triggeredBy._id}">
-   <img class="user-avatar" src="/img/users/${el.triggeredBy.photo}" alt="User Avatar">
-   <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
-    <p class="message-count">${el.totalMessages}</p>
-   <p class="user-message-preview">${el.preview}</p>
- </li>
-     `;
-        }).join("");
-        list.insertAdjacentHTML("afterbegin", markup);
-    }
+    if (data.chatNotifications.length > 0) renderChatNotifications(data.chatNotifications);
+    if (data.serverNotifications.length > 0) updateServerNotificationsCount(data.serverNotifications.length);
 })();
 socket.on("chat", (msg, callback)=>{
     callback({
@@ -664,7 +650,7 @@ socket.on("inviteToRoom", async (room)=>{
     socket.emit("join", room);
     console.log("invite to room was emited");
 });
-socket.on("notification", (notification, callback)=>{
+socket.on("ChatNotification", (notification, callback)=>{
     const markup = `
    <li class="user-item" data-user-id="${notification.triggeredBy._id}">
   <img class="user-avatar" src="/img/users/${notification.triggeredBy.photo}" alt="User Avatar">
@@ -781,19 +767,48 @@ openCreateFormBtn.addEventListener("click", (e)=>{
     listContainer.addEventListener("click", (e)=>{
         if (!e.target.classList.contains("add-contact-btn")) return;
         const btn = e.target;
-        const id = btn.closest("li").data.userId;
-        btn.textContent = "Added";
-        const participants = main.querySelector("#hidden-input");
-        participants.value += ` ${id}`;
+        if (!btn.classList.contains("clicked")) {
+            btn.classList.add("clicked");
+            const id = btn.closest("li").data.userId;
+            btn.textContent = "Added";
+            const participants = main.querySelector("#hidden-input");
+            participants.value += ` ${id}`;
+        } else {
+            const participants = main.querySelector("#hidden-input");
+            const participantsArray = participants.value.trim().split(" ");
+            const id = btn.closest("li").data.userId;
+            const index = participantsArray.findIndex((el)=>el === id);
+            participantsArray.splice(index, 1);
+            participants.value = participantsArray.join(" ");
+            btn.classList.remove("clicked");
+            btn.textContent = "+";
+        }
     });
     const createGroupForm = main.querySelector(".create-group-form");
-    createGroupForm.addEventListener("submit", (e)=>{
+    createGroupForm.addEventListener("submit", async (e)=>{
         e.preventDefault();
         const formData = new FormData(createGroupForm);
+        (0, _createGroupJs.createGroup)(formData);
     });
 });
+function renderChatNotifications(notifications) {
+    const list = document.querySelector(".user-list");
+    const markup = notifications.map((el)=>{
+        const userItem = document.querySelector(`.user-item[data-user-id="${el.triggeredBy._id}"]`);
+        if (userItem) list.removeChild(userItem);
+        return `
+    <li class="user-item" data-user-id="${el.triggeredBy._id}">
+   <img class="user-avatar" src="/img/users/${el.triggeredBy.photo}" alt="User Avatar">
+   <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
+    <p class="message-count">${el.totalMessages}</p>
+   <p class="user-message-preview">${el.preview}</p>
+ </li>
+     `;
+    }).join("");
+    list.insertAdjacentHTML("afterbegin", markup);
+}
 
-},{"./login.js":"7yHem","./markNotificationsAsVisualized.js":"hM2ud","socket.io-client":"8HBJR","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"7yHem":[function(require,module,exports) {
+},{"./login.js":"7yHem","./markNotificationsAsVisualized.js":"hM2ud","socket.io-client":"8HBJR","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./createGroup.js":"4JOGA"}],"7yHem":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "login", ()=>login);
@@ -9253,6 +9268,24 @@ function Backoff(opts) {
     this.jitter = jitter;
 };
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["hhrAs","f2QDv"], "f2QDv", "parcelRequire1ab2")
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"4JOGA":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "createGroup", ()=>createGroup);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const createGroup = async (data, socket)=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "POST",
+        url: "/api/v1/users/group",
+        data
+    });
+    if (res.status === "success") {
+        const participants = res.data.participants.filter((el)=>!el.agreedToJoin);
+        socket.emit("issueInvitations", participants, res.room);
+    }
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["hhrAs","f2QDv"], "f2QDv", "parcelRequire1ab2")
 
 //# sourceMappingURL=index.js.map

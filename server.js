@@ -4,6 +4,7 @@ import {
   onChatWith,
   onJoin,
   joinToRoom,
+  onIssueInvitations,
 } from "./controllers/socketController.js";
 import server from "./app.js";
 import mongoose from "mongoose";
@@ -25,8 +26,7 @@ mongoose.connect(DB).then(() => {
       socket.on("join", onJoin(socket, joinedRooms));
       socket.on("chat", onChat(socket, io, userId));
       socket.on("chat with", onChatWith(socket, io, userId, joinedRooms));
-     
-     
+      socket.on("issueInvitations", onIssueInvitations(socket, io, userId));
     });
     socket.on("disconnect", () => {
       console.log("user disconnected");
