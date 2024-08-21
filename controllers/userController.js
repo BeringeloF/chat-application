@@ -1,14 +1,9 @@
 import User from "../db/userModel.js";
 import catchAsync from "../helpers/catchAsync.js";
 import { AppError } from "../helpers/appError.js";
-import Redis from "ioredis";
+import { redis } from "./socketController.js";
 import multer from "multer";
 import getUserObj from "../helpers/getUserObj.js";
-
-const redis = new Redis();
-redis.on("error", (err) => {
-  console.error("Erro ao conectar ao Redis:", err);
-});
 
 export const getAllUsers = catchAsync(async (req, res, next) => {
   const users = await User.find();
@@ -47,7 +42,7 @@ export const getNotifications = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: "success",
     data: {
-      chatNotifications: userObj.ChatNotifications,
+      chatNotifications: userObj.chatNotifications,
       serverNotifications: userObj.serverNotifications,
     },
   });
@@ -66,11 +61,11 @@ export const markNotificationsAsVisualized = catchAsync(
   async (req, res, next) => {
     const userObj = await getUserObj(req.user._id.toString());
 
-    const index = userObj.notifications.findIndex(
+    const index = userObj.chatNotifications.findIndex(
       (el) => el.triggeredBy._id.toString() === req.params.triggeredById
     );
 
-    index > -1 && userObj.notifications.splice(index, 1);
+    index > -1 && userObj.chatNotifications.splice(index, 1);
 
     redis.set(req.user._id.toString(), JSON.stringify(userObj));
     res.status(204).json({
@@ -114,17 +109,13 @@ export const createGroup = catchAsync(async (req, res, next) => {
   const participants = req.body.participants
     .trim()
     .split(" ")
-    .map((id) => {
-      return { user: id, agreedToJoin: false };
-    });
+    .map((id) => id);
   const roomObj = {
     name: req.body.name,
     imageCover: req.file.filename,
     messages: [],
-    participants: [
-      { user: req.user._id.toString(), agreedToJoin: true },
-      ...participants,
-    ],
+    maybeParticipants: [...participants],
+    participants: [req.user._id.toString()],
     createdBy: req.user._id.toString(),
     createdAt: date,
   };
@@ -151,12 +142,52 @@ export const joinToGroup = catchAsync(async (req, res, next) => {
   if (!(await redis.get(req.params.room)))
     return next(new AppError("invalid group room!", 400));
 
+  if (userObj.rooms.find((el) => el === req.params.room))
+    return next(new AppError("You are alredy joined to this group!", 400));
+
   userObj.rooms.push(req.params.room);
 
-  await redis.set(req.user._id.toString(), JSON.stringify(userObj));
+  let [, , roomObj] = await Promise.all([
+    redis.set(req.user._id.toString(), JSON.stringify(userObj)),
+    redis.get(req.params.room),
+  ]);
+
+  roomObj = roomObj && JSON.parse(roomObj);
+
+  const index = roomObj.maybeParticipants.findIndex(
+    (el) => el === req.user._id.toString()
+  );
+
+  if (index > -1) {
+    roomObj.maybeParticipants.splice(index, 1);
+    roomObj.participants.push(req.user._id.toString());
+    await redis.set(req.params.room, JSON.stringify(roomObj));
+  } else {
+    return next(
+      new AppError("an unexpected error occured, try again later!", 500)
+    );
+  }
 
   res.status(200).json({
     status: "success",
     data: userObj,
+  });
+});
+
+export const getChats = catchAsync(async (req, res, next) => {
+  const userObj = await getUserObj(req.user._id);
+  const chats = userObj.rooms.map((room) => {
+    const arr = room.split("-");
+    if (arr.includes("CHAT")) {
+      arr.splice(0, 1);
+      const chat = arr.find((el) => el !== req.user._id);
+      return chat;
+    } else {
+      return room;
+    }
+  });
+  res.status(200).json({
+    status: "success",
+    data: chats,
   });
 });

@@ -12,6 +12,8 @@ router.get("/logout", authController.logout);
 
 router.get("/getMe", authController.protect, userController.getMe);
 
+router.get("/getChats", userController.getChats);
+
 router.post(
   "/group",
   authController.protect,

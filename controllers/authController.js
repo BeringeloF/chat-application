@@ -4,6 +4,7 @@ import catchAsync from "../helpers/catchAsync.js";
 import jwt from "jsonwebtoken";
 import { AppError } from "../helpers/appError.js";
 import crypto from "crypto";
+import { redis } from "./socketController.js";
 
 const singToken = (id, refresh = false) => {
   if (!refresh) {
@@ -79,7 +80,19 @@ export const login = catchAsync(async (req, res, next) => {
   //check if email exist and password is correct
   if (!user || !(await user.correctPassword(password, user.password)))
     return next(new AppError("incorrect email or password!", 400));
+  const resp = await redis.get(user._id.toString());
+  if (!resp) {
+    const userObj = {
+      name: user.name,
+      image: user.photo,
+      id: req.user._id.toString(),
+      rooms: [],
+      chatNotifications: [],
+      serverNotifications: [],
+    };
 
+    redis.set(user._id, JSON.stringify(userObj));
+  }
   // if everything is correct send access token
   createSendToken(user, 200, res);
 });

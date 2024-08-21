@@ -4,7 +4,7 @@ import { AppError } from "../helpers/appError.js";
 import generateTemplate from "../helpers/generateTemplate.js";
 import getUserObj from "../helpers/getUserObj.js";
 
-const redis = new Redis();
+export const redis = new Redis();
 redis.on("error", (err) => {
   console.error("Erro ao conectar ao Redis:", err);
 });
@@ -50,9 +50,9 @@ const createAndSendChatNotification = async (
     }
     //saving the target userObj with the newest notification
     await redis.set(targetUserId, JSON.stringify(userObj));
-    io.to(targetUserId)
-      .timeout(5000)
-      .emitWithAck("chatNotification", notificationObj);
+    console.log(io);
+    console.log(targetUserId);
+    io.to(targetUserId).emit("chatNotification", notificationObj);
   } catch (err) {
     console.error("ERROR MINE", err);
   }
@@ -90,10 +90,10 @@ const getOrSetValues = async (userId, targetUserId) => {
     let data, room;
 
     if (roomOneIsNotEmpty) {
-      room = `${userId}-${targetUserId}`;
+      room = `CHAT-${userId}-${targetUserId}`;
       data = JSON.parse(roomOneIsNotEmpty);
     } else if (roomTwoIsNotEmpty) {
-      room = `${targetUserId}-${userId}`;
+      room = `CHAT-${targetUserId}-${userId}`;
       data = JSON.parse(roomTwoIsNotEmpty);
     } else {
       room = `CHAT-${userId}-${targetUserId}`;
@@ -104,7 +104,12 @@ const getOrSetValues = async (userId, targetUserId) => {
       console.log("Novo room criado e salvo.");
     }
 
-    // Continue com a lógica após a operação Redis
+    const userObj = await getUserObj(userId);
+    if (userObj.rooms.find((el) => el === room))
+      return next(new AppError("You are alredy joined to this chat!", 400));
+
+    userObj.rooms.push(room);
+    redis.set(userId, JSON.stringify(userObj));
     console.log("Room:", room);
     console.log("Data:", data);
     return [room, data];
@@ -133,6 +138,7 @@ export const onChat = (socket, io, userId) => {
         if (err) {
           console.error("Erro ao obter o valor:", err);
         }
+        console.log(reply);
         const roomObj = reply && JSON.parse(reply);
         const message = {
           content: msg,

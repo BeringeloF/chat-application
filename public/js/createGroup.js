@@ -8,7 +8,7 @@ export const createGroup = async (data, socket) => {
   });
 
   if (res.status === "success") {
-    const participants = res.data.participants.filter((el) => !el.agreedToJoin);
-    socket.emit("issueInvitations", participants, res.room);
+    const maybeParticipants = res.data.partipants;
+    socket.emit("issueInvitations", maybeParticipants, res.room);
   }
 };

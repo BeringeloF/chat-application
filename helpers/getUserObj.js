@@ -1,13 +1,13 @@
+import { redis } from "../controllers/socketController.js";
+import { AppError } from "./appError.js";
+
 const getUserObj = async (id, next) => {
   try {
-    if (!next) {
-      let userObj = await redis.get(id);
-      userObj = userObj && JSON.parse(userObj);
+    let userObj = await redis.get(id);
+    userObj = userObj && JSON.parse(userObj);
 
-      if (!userObj)
-        throw new AppError("this user was not found on redis!", 404);
-      return userObj;
-    }
+    if (!userObj) throw new AppError("this user was not found on redis!", 404);
+    return userObj;
   } catch (err) {
     throw err;
   }
