@@ -5,21 +5,20 @@ import { redis } from "./socketController.js";
 
 export const getHomePage = catchAsync(async (req, res) => {
   const userObj = await getUserObj(req.user._id);
-  const chatsPromises = userObj.rooms.map(async (room) => {
+  const contactsPromises = userObj.rooms.map(async (room) => {
     const arr = room.split("-");
     if (arr.includes("CHAT")) {
       arr.splice(0, 1);
-      const chat = arr.find((el) => el !== req.user._id);
-      return JSON.parse(await redis.get(chat));
+      const contact = arr.find((el) => el !== req.user._id.toString());
+      return JSON.parse(await redis.get(contact));
     } else {
-      return room;
+      return JSON.parse(await redis.get(room));
     }
   });
-
-  const chats = await Promise.all(chatsPromises);
+  const constactsAndGroups = await Promise.all(contactsPromises);
 
   res.status(200).render("chat-page", {
-    chats,
+    users: constactsAndGroups,
   });
 });
 

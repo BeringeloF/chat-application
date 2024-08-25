@@ -105,11 +105,11 @@ const getOrSetValues = async (userId, targetUserId) => {
     }
 
     const userObj = await getUserObj(userId);
-    if (userObj.rooms.find((el) => el === room))
-      return next(new AppError("You are alredy joined to this chat!", 400));
+    if (!userObj.rooms.find((el) => el === room)) {
+      userObj.rooms.push(room);
+      redis.set(userId, JSON.stringify(userObj));
+    }
 
-    userObj.rooms.push(room);
-    redis.set(userId, JSON.stringify(userObj));
     console.log("Room:", room);
     console.log("Data:", data);
     return [room, data];
@@ -208,20 +208,28 @@ export const onJoin = (socket, joinedRooms) => {
 
 export const onIssueInvitations = (socket, io, userId) => {
   return async (participants, room) => {
+    console.log("SENDING INVITATIONS!");
     try {
+      const { image, name } = await getUserObj(userId);
       await Promise.all([
         ...participants.map(async (el) => {
+          console.log(el);
           const notification = {
-            triggeredBy: userId,
+            triggeredBy: {
+              id: userId,
+              image,
+              name,
+            },
             context: "invite to group",
             room,
             sendedAt: Date.now(),
-            targetUserId: el.user,
+            targetUserId: el,
           };
-          const userObj = await getUserObj(el.user);
+
+          const userObj = await getUserObj(el);
           userObj.serverNotifications.push(notification);
-          await redis.set(el.user, JSON.stringify(userObj));
-          io.emit("serverNotification", notification);
+          await redis.set(el, JSON.stringify(userObj));
+          io.to(el).emit("serverNotification", notification);
         }),
       ]);
     } catch (err) {

@@ -7,12 +7,20 @@ body {
 
 .container {
   display: flex;
-  height: 100vh;
+  height: 100%;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: rgb(21, 20, 20);
+  padding: 20px;
 }
 
 .sidebar {
   width: 300px;
-  background-color: #f5f6fa;
+  background-color: #1d1d1f;
   display: flex;
   flex-direction: column;
 }
@@ -35,10 +43,18 @@ body {
   margin-right: 10px;
 }
 
+.user-avatar-2 {
+  width: 75px;
+  height: 75px;
+  background-color: #ddd;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
 .user-name {
   font-size: 18px;
   font-weight: bold;
-  color: #333;
+  margin-left: 5px;
 }
 
 .create-group-icon {
@@ -46,20 +62,15 @@ body {
   cursor: pointer;
 }
 
-.search-bar {
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 10px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-}
-
 .search-results {
   padding: 0 20px;
   margin-bottom: 10px;
+  width: 50%;
+  align-self: center;
 }
 
-.user-list {
+.user-list,
+.searched-users {
   list-style-type: none;
   padding: 0;
   margin: 0;
@@ -75,7 +86,7 @@ body {
 }
 
 .user-item:hover {
-  background-color: #eee;
+  background-color: #252424;
 }
 
 .user-avatar {
@@ -89,7 +100,7 @@ body {
 .user-name {
   font-size: 16px;
   font-weight: bold;
-  color: #333;
+  color: #f2e9e9;
   flex: 1;
 }
 
@@ -98,12 +109,17 @@ body {
   font-size: 14px;
 }
 
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background-color: #fff;
-  padding: 20px;
+.search-bar {
+  width: 50%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  align-self: center;
+}
+
+.h1 {
+  text-align: center;
 }
 
 .main-content .chat-header {
@@ -244,15 +260,18 @@ body {
 
 /* notification style */
 
+.notification-container {
+  display: flex;
+  justify-content: center;
+}
+
 .notification-card {
   display: flex;
   align-items: center;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 16px;
-  max-width: 400px;
-  margin: 0 auto;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  width: 60%;
+  height: 150px;
+  border: 1px solid #515050;
 }
 
 .user-photo {
@@ -301,10 +320,11 @@ body {
   max-width: 900px;
   margin: 40px auto;
   padding: 20px;
-  border: 1px solid #ddd;
+  border: 1px solid #515050;
   border-radius: 8px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
+
 .form-container {
   flex: 2;
   padding-right: 20px;
@@ -380,6 +400,7 @@ body {
 .contact-list li {
   display: flex;
   justify-content: space-between;
+  width: 130px;
   align-items: center;
   padding: 10px;
   border: 1px solid #ddd;
@@ -401,7 +422,18 @@ body {
   cursor: pointer;
 }
 
-.add-contact-btn:hover {
+.add-contact-btn-2 {
+  background-color: #28a745;
+  border: none;
+  color: #fff;
+  padding: 5px 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 30px;
+}
+
+.add-contact-btn:hover,
+.add-contact-btn-2:hover {
   background-color: #218838;
 }
 
@@ -430,4 +462,54 @@ body {
 
 .notification-count.show {
   display: inline; /* Exibe o número quando houver notificações */
+}
+
+.invitation-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+  margin-right: 14px;
+}
+
+p {
+  font-size: 18px;
+  font-family: Arial, sans-serif;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.button-group {
+  display: flex;
+  gap: 20px;
+}
+
+button {
+  padding: 10px 20px;
+  font-size: 16px;
+  font-family: Arial, sans-serif;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.accept-invitation {
+  background-color: #28a745;
+  color: white;
+}
+
+.accept-invitation:hover {
+  background-color: #218838;
+}
+
+.deny-invitation {
+  background-color: #dc3545;
+  color: white;
+}
+
+.deny-invitation:hover {
+  background-color: #c82333;
 }

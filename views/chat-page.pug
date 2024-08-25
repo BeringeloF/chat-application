@@ -28,20 +28,22 @@ html(lang="en")
             .notification-icon
               span#notification-count.notification-count 0
               i.bell-icon &#x1F514;
-
-          input(type="text" class="search-bar" placeholder="Buscar...")
-        .search-results
         ul.user-list
-          each userT in users
-            li.user-item(data-user-id=`${userT._id}`)
-              img.user-avatar(src=`/img/users/${userT.photo}`)
-              .user-name= userT.name.split(' ')[0]
+          each user in users
+            li.user-item(data-user-id=`${user.id}`)
+              -const isGroup = user.image.includes('group')
+              if isGroup
+                img.user-avatar(src=`/img/group/${user.image}`)
+              else 
+                img.user-avatar(src=`/img/users/${user.image}`)
+              .user-name= user.name.split(' ')[0]
               .user-message-preview Lorem ipsum dolor sit amet...
             //- Outros usuários
       .main-content
-        .chat-header
-          
-        .chat-box
+        h1(class="h1") Search for users
+        input(type="text" class="search-bar" placeholder="Buscar...")
+        .search-results
+          ul.searched-users.user-list
          
         
    

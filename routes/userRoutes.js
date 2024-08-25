@@ -4,7 +4,7 @@ import * as authController from "../controllers/authController.js";
 
 export const router = express.Router();
 
-router.get("/", userController.getAllUsers);
+router.get("/", userController.getUsers);
 
 router.post("/login", authController.login);
 
@@ -12,7 +12,7 @@ router.get("/logout", authController.logout);
 
 router.get("/getMe", authController.protect, userController.getMe);
 
-router.get("/getChats", userController.getChats);
+router.get("/getContacts", authController.protect, userController.getContacts);
 
 router.post(
   "/group",
@@ -20,6 +20,10 @@ router.post(
   userController.uploadGroupImage,
   userController.createGroup
 );
+
+router.post("/chat", authController.protect, userController.createChat);
+
+router.get("/search", userController.getUsers);
 
 router
   .route("/group/:room")

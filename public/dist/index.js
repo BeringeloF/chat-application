@@ -590,6 +590,8 @@ var _loginJs = require("./login.js");
 var _markNotificationsAsVisualizedJs = require("./markNotificationsAsVisualized.js");
 var _socketIoClient = require("socket.io-client");
 var _socketIoClientDefault = parcelHelpers.interopDefault(_socketIoClient);
+var _searchJs = require("./search.js");
+var _addToContactsJs = require("./addToContacts.js");
 class App {
     #socket = (0, _socketIoClientDefault.default)();
     #usersContainer = document.querySelector(".user-list");
@@ -597,17 +599,31 @@ class App {
     #main = document.querySelector(".main-content");
     #openCreateFormBtn = document.querySelector(".create-group-icon");
     #notificationCountEl = document.getElementById("notification-count");
+    #searchBar = document.querySelector(".search-bar");
+    #searchResults = document.querySelector(".search-results");
+    #bellIcon = document.querySelector(".bell-icon");
     constructor(){
-        this.#createPriviteConnectionWithServer();
-        this.#getNotifications();
+        if (!this.#loginForm) {
+            this.#createPriviteRoomWithServer();
+            this.#getNotifications();
+        }
         this.#socket.on("chat", this.#renderMessage.bind(this));
         this.#socket.on("inviteToRoom", this.#acceptInvitation.bind(this));
         this.#socket.on("chatNotification", this.#renderChatNotification);
+        this.#socket.on("serverNotification", (notification)=>{
+            this.#notificationCountEl.textContent = +this.#notificationCountEl.textContent + 1;
+            this.#notificationCountEl.classList.add("show");
+        });
         this.#usersContainer?.addEventListener("click", this.#renderChat.bind(this));
         this.#loginForm?.addEventListener("submit", this.#sendLoginForm.bind(this));
         this.#openCreateFormBtn?.addEventListener("click", this.#openCreateGroupForm.bind(this));
+        this.#bellIcon && this.#bellIcon.addEventListener("click", this.#renderServerNotifications.bind(this));
+        if (this.#searchBar) {
+            this.#searchBar.addEventListener("keydown", this.#doSearch.bind(this));
+            this.#searchResults.addEventListener("click", this.#tryToAddUser.bind(this));
+        }
     }
-    async #createPriviteConnectionWithServer() {
+    async #createPriviteRoomWithServer() {
         const res = await fetch("/api/v1/users/getMe");
         const userId = await res.json();
         console.log(userId);
@@ -615,8 +631,8 @@ class App {
         this.#socket.emit("createRoomWithServer", userId.userId);
     }
     async #getNotifications() {
-        const notifiRes = await fetch("/api/v1/users/notifications");
-        const { data } = await notifiRes.json();
+        const res = await fetch("/api/v1/users/notifications");
+        const { data } = await res.json();
         console.log("notifications:", data);
         if (data.chatNotifications.length > 0) this.#renderChatNotifications(data.chatNotifications);
         if (data.serverNotifications.length > 0) this.#notificationCountEl.textContent = data.serverNotifications.length;
@@ -721,9 +737,9 @@ class App {
         console.log(email);
         (0, _loginJs.login)(email, password);
     }
-    #openCreateGroupForm() {
+    async #openCreateGroupForm() {
         this.#main.innerHTML = "";
-        const createUserFormMarkup = `
+        const createGroupFormMarkup = `
     <div class="div"> 
     <div class="form-container">
           <h2>Criar Novo Grupo</h2>
@@ -747,54 +763,39 @@ class App {
           </form>
       </div>
 
-      <!-- Lista de contatos -->
       <div class="contacts-container">
           <h3>Contatos</h3>
           <ul class="contact-list">
-              <li data-user-id="">
-                  <span class="contact-name">Contato 1</span>
-                  <button class="add-contact-btn">+</button>
-              </li>
-              <li data-user-id="">
-                  <span class="contact-name">Contato 2</span>
-                  <button class="add-contact-btn">+</button>
-              </li>
-             <li data-user-id="">
-                  <span class="contact-name">Contato 3</span>
-                  <button class="add-contact-btn">+</button>
-             </li>
+             
           </ul>
       </div>
     </div>
     `;
-        this.#main.insertAdjacentHTML("afterbegin", createUserFormMarkup);
-        const listContainer = document.querySelector(".contact-list");
-        listContainer.addEventListener("click", (e)=>{
-            if (!e.target.classList.contains("add-contact-btn")) return;
-            const btn = e.target;
-            if (!btn.classList.contains("clicked")) {
-                btn.classList.add("clicked");
-                const id = btn.closest("li").getAttribute("data-user-id");
-                btn.textContent = "Added";
-                const participants = this.#main.querySelector("#hidden-input");
-                participants.value += ` ${id}`;
-            } else {
-                const participants = this.#main.querySelector("#hidden-input");
-                const participantsArray = participants.value.trim().split(" ");
-                const id = btn.closest("li").getAttribute("data-user-id");
-                const index = participantsArray.findIndex((el)=>el === id);
-                participantsArray.splice(index, 1);
-                participants.value = participantsArray.join(" ");
-                btn.classList.remove("clicked");
-                btn.textContent = "+";
-            }
-        });
-        const createGroupForm = this.#main.querySelector(".create-group-form");
-        createGroupForm.addEventListener("submit", async (e)=>{
-            e.preventDefault();
-            const formData = new FormData(createGroupForm);
-            (0, _createGroupJs.createGroup)(formData);
-        });
+        try {
+            const res = await fetch("/api/v1/users/getContacts");
+            const { data } = await res.json();
+            const contactsMarkup = data.map((el)=>{
+                return `
+       <li data-user-id="${el.id}">
+            <img class="user-avatar"src="/img/users/${el.image}">
+            <span class="contact-name">${el.name.split(" ")[0]}</span>
+            <button class="add-contact-btn">+</button>
+       </li>`;
+            }).join("");
+            this.#main.insertAdjacentHTML("afterbegin", createGroupFormMarkup);
+            const listContainer = document.querySelector(".contact-list");
+            listContainer.innerHTML = contactsMarkup;
+            listContainer.addEventListener("click", this.#addToGroup.bind(this));
+            const createGroupForm = this.#main.querySelector(".create-group-form");
+            createGroupForm.addEventListener("submit", async (e)=>{
+                e.preventDefault();
+                const formData = new FormData(createGroupForm);
+                (0, _createGroupJs.createGroup)(formData, this.#socket);
+                console.log("trying to create group...");
+            });
+        } catch (err) {
+            console.error("\uD83D\uDCA5", err);
+        }
     }
     #renderChatNotifications(notifications) {
         const list = document.querySelector(".user-list");
@@ -812,10 +813,86 @@ class App {
         }).join("");
         list.insertAdjacentHTML("afterbegin", markup);
     }
+    async #doSearch(e) {
+        if (e.key !== "Enter") return;
+        if (this.#searchBar.value.trim().length === 0) return;
+        console.log(this.#searchBar.value.trim());
+        const users = await (0, _searchJs.search)(this.#searchBar.value.trim());
+        if (users.length === 0) {
+            this.#searchResults.innerHTML = "No results found!";
+            return;
+        }
+        this.#searchResults.innerHTML = "";
+        const markup = users.map((user)=>{
+            const html = `<div class="user-item" data-user-id="${user._id}">
+          <img src="/img/users/${user.photo}" class="user-avatar-2">
+          <div class="user-name">${user.name}</div>
+          <button class="add-contact-btn-2">+</button>
+      </div>`;
+            return html;
+        }).join("");
+        this.#searchResults.innerHTML = markup;
+    }
+    async #tryToAddUser(e) {
+        if (!e.target.classList.contains("add-contact-btn-2")) return;
+        const el = e.target.closest(".user-item");
+        if (!el) return;
+        const id = el.getAttribute("data-user-id");
+        console.log(id);
+        (0, _addToContactsJs.addToContacts)(id);
+    }
+    async #renderServerNotifications() {
+        this.#main.innerHTML = "";
+        this.#notificationCountEl.classList.remove("show");
+        const res = await fetch("/api/v1/users/notifications");
+        const { data } = await res.json();
+        const notificationsMarkup = data.serverNotifications.map((el)=>{
+            if (el.context === "invite to group") return `<div class="notification-card">
+    <div class="user-photo">
+        <img src="/img/users/${el.triggeredBy.image}" alt="User Photo">
+    </div>
+    <div class="notification-content">
+        <div class="user-info">
+            <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
+            <div class="invitation-container">
+              <p>Do you want to accept the invitation to join the group?</p>
+              <div class="button-group">
+                  <button class="accept-invitation">Accept</button>
+                  <button class="deny-invitation">Deny</button>
+              </div>
+        </div>
+        </div>
+
+    </div>
+</div>`;
+        }).join("");
+        const markup = `<div class="notification-container">${notificationsMarkup}</div>`;
+        this.#main.innerHTML = markup;
+    }
+    #addToGroup(e) {
+        if (!e.target.classList.contains("add-contact-btn")) return;
+        const btn = e.target;
+        if (!btn.classList.contains("clicked")) {
+            btn.classList.add("clicked");
+            const id = btn.closest("li").getAttribute("data-user-id");
+            btn.textContent = "Added";
+            const participants = this.#main.querySelector("#hidden-input");
+            participants.value += ` ${id}`;
+        } else {
+            const participants = this.#main.querySelector("#hidden-input");
+            const participantsArray = participants.value.trim().split(" ");
+            const id = btn.closest("li").getAttribute("data-user-id");
+            const index = participantsArray.findIndex((el)=>el === id);
+            participantsArray.splice(index, 1);
+            participants.value = participantsArray.join(" ");
+            btn.classList.remove("clicked");
+            btn.textContent = "+";
+        }
+    }
 }
 const app = new App();
 
-},{"./login.js":"7yHem","./markNotificationsAsVisualized.js":"hM2ud","socket.io-client":"8HBJR","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./createGroup.js":"4JOGA"}],"7yHem":[function(require,module,exports) {
+},{"./login.js":"7yHem","./markNotificationsAsVisualized.js":"hM2ud","socket.io-client":"8HBJR","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./createGroup.js":"4JOGA","./search.js":"1VcuN","./addToContacts.js":"l4d3w"}],"7yHem":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "login", ()=>login);
@@ -9287,9 +9364,52 @@ const createGroup = async (data, socket)=>{
         url: "/api/v1/users/group",
         data
     });
-    if (res.status === "success") {
-        const maybeParticipants = res.data.partipants;
+    console.log(res);
+    if (res.data.status === "success") {
+        console.log("STATUS === SUCCESS");
+        const { maybeParticipants } = res.data.data;
         socket.emit("issueInvitations", maybeParticipants, res.room);
+    }
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"1VcuN":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "search", ()=>search);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const search = async (data)=>{
+    try {
+        const res1 = await (0, _axiosDefault.default)({
+            method: "GET",
+            url: "/api/v1/users/search?search=" + data
+        });
+        console.log(res1);
+        return res1.data.data.users;
+    } catch (err) {
+        console.error("error mine", err);
+    }
+    return res;
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"l4d3w":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "addToContacts", ()=>addToContacts);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const addToContacts = async (id)=>{
+    try {
+        const res = await (0, _axiosDefault.default)({
+            method: "POST",
+            url: "/api/v1/users/chat",
+            data: {
+                id
+            }
+        });
+        if (res.status === "success") location.assign("/");
+    } catch (err) {
+        console.error("error mine", err);
     }
 };
 

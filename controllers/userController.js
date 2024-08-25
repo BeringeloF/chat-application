@@ -4,9 +4,14 @@ import { AppError } from "../helpers/appError.js";
 import { redis } from "./socketController.js";
 import multer from "multer";
 import getUserObj from "../helpers/getUserObj.js";
+import path from "node:path";
 
-export const getAllUsers = catchAsync(async (req, res, next) => {
-  const users = await User.find();
+export const getUsers = catchAsync(async (req, res, next) => {
+  let filter = {};
+  if (req.query.search) {
+    filter = { $text: { $search: req.query.search } };
+  }
+  const users = await User.find(filter);
   res.status(200).json({
     status: "success",
     results: users.length,
@@ -89,7 +94,7 @@ const multerFilter = (req, file, cb) => {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "./public/img/group-images/"); // Pasta onde os arquivos serão salvos
+    cb(null, "./public/img/group/"); // Pasta onde os arquivos serão salvos
   },
   filename: (req, file, cb) => {
     cb(null, `group-image-${Date.now()}-${path.extname(file.originalname)}`);
@@ -112,7 +117,7 @@ export const createGroup = catchAsync(async (req, res, next) => {
     .map((id) => id);
   const roomObj = {
     name: req.body.name,
-    imageCover: req.file.filename,
+    image: req.file.filename,
     messages: [],
     maybeParticipants: [...participants],
     participants: [req.user._id.toString()],
@@ -126,7 +131,7 @@ export const createGroup = catchAsync(async (req, res, next) => {
 
   await Promise.all([
     redis.set(room, JSON.stringify(roomObj)),
-    redis.set(req.user._id.toString(), JSON.parse(userObj)),
+    redis.set(req.user._id.toString(), JSON.stringify(userObj)),
   ]);
 
   res.status(201).json({
@@ -174,20 +179,53 @@ export const joinToGroup = catchAsync(async (req, res, next) => {
   });
 });
 
-export const getChats = catchAsync(async (req, res, next) => {
+export const getContacts = catchAsync(async (req, res, next) => {
   const userObj = await getUserObj(req.user._id);
-  const chats = userObj.rooms.map((room) => {
+  const contactsPromises = userObj.rooms.map(async (room) => {
     const arr = room.split("-");
     if (arr.includes("CHAT")) {
       arr.splice(0, 1);
-      const chat = arr.find((el) => el !== req.user._id);
-      return chat;
-    } else {
-      return room;
+      const contact = arr.find((el) => el !== req.user._id.toString());
+      return JSON.parse(await redis.get(contact));
     }
   });
+  const contacts = await Promise.all(contactsPromises);
   res.status(200).json({
     status: "success",
-    data: chats,
+    data: contacts,
+  });
+});
+
+export const createChat = catchAsync(async (req, res, next) => {
+  console.log(req.body);
+  const targetUser = await User.findById(req.body.id);
+  if (!targetUser) return next(new AppError("this user does not exist!", 404));
+  const room = `CHAT-${req.user._id}-${targetUser._id}`;
+
+  if (await redis.get(room)) {
+    return res.status(409).json({
+      status: "failed!",
+      message: "this chat has alredy been created",
+    });
+  }
+
+  const usersObj = await Promise.all([
+    getUserObj(req.user._id.toString()),
+    getUserObj(targetUser._id.toString()),
+  ]);
+
+  usersObj.forEach((el) => {
+    el.rooms.push(room);
+  });
+
+  await Promise.all([
+    redis.set(req.user._id.toString(), JSON.stringify(usersObj[0])),
+    redis.set(targetUser._id.toString(), JSON.stringify(usersObj[1])),
+    redis.set(room, JSON.stringify({ messages: [] })),
+  ]);
+
+  res.status(201).json({
+    status: "success",
+    room,
   });
 });

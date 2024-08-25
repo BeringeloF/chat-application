@@ -80,12 +80,14 @@ export const login = catchAsync(async (req, res, next) => {
   //check if email exist and password is correct
   if (!user || !(await user.correctPassword(password, user.password)))
     return next(new AppError("incorrect email or password!", 400));
+
   const resp = await redis.get(user._id.toString());
+
   if (!resp) {
     const userObj = {
       name: user.name,
       image: user.photo,
-      id: req.user._id.toString(),
+      id: user._id.toString(),
       rooms: [],
       chatNotifications: [],
       serverNotifications: [],
