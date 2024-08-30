@@ -1,7 +1,5 @@
 import User from "../db/userModel.js";
 import Redis from "ioredis";
-import { AppError } from "../helpers/appError.js";
-import generateTemplate from "../helpers/generateTemplate.js";
 import getUserObj from "../helpers/getUserObj.js";
 
 export const redis = new Redis();
@@ -20,6 +18,7 @@ const createAndSendChatNotification = async (
     const userObj = await getUserObj(targetUserId);
 
     const triggeredByUser = await User.findById(userId);
+
     const notificationObj = {
       room,
       preview: msg.slice(0, 22),
@@ -58,16 +57,66 @@ const createAndSendChatNotification = async (
   }
 };
 
-const createAndSendServerNotification = () => {};
+const createAndSendGroupNotification = async (userId, io, room, msg) => {
+  let group = await redis.get(room);
+  group = group && JSON.parse(group);
+  const { participants } = group;
+  const notificationObj = {
+    room,
+    groupData: group,
+    preview: msg.slice(0, 22),
+    sendedAt: Date.now(),
+    triggeredBy: userId,
+    totalMessages: 1,
+    isFromGroup: true,
+  };
+  participants
+    .filter((id) => id !== userId)
+    .forEach(async (id) => {
+      const userObj = await getUserObj(id);
+      const notificationIndex = userObj.chatNotifications.findIndex(
+        (el) =>
+          el.room === notificationObj.room &&
+          notificationObj.room.includes("GROUP")
+      );
+      if (notificationIndex !== -1) {
+        notificationObj.totalMessages =
+          userObj.chatNotifications[notificationIndex].totalMessages + 1;
+        userObj.chatNotifications[notificationIndex] = notificationObj;
+      } else {
+        userObj.chatNotifications.push(notificationObj);
+      }
+      redis.set(id, JSON.stringify(userObj));
+      console.log(id);
+      io.to(id).emit("chatNotification", notificationObj);
+    });
+};
 
 // Armazenar salas nas quais o socket está inscrito
 
-export const joinToRoom = (room, joinedRooms, socket, callback) => {
+export const joinToRoom = async (
+  room,
+  joinedRooms,
+  socket,
+  callback,
+  userId
+) => {
   if (!joinedRooms.has(room)) {
     socket.join(room);
     joinedRooms.add(room);
     console.log(`Usuário ${socket.id} inscrito na sala ${room}`);
-    if (callback) callback({ status: "joined" });
+    try {
+      const roomJson = await redis.get(room);
+      const roomObj = roomJson && JSON.parse(roomJson);
+      const callbackObj = { status: "joined" };
+      if (userId) {
+        callbackObj.data = roomObj.messages;
+        callbackObj.myId = userId;
+      }
+      if (callback) callback(callbackObj);
+    } catch (err) {
+      console.error("Error mine", err);
+    }
 
     return true;
   } else {
@@ -76,56 +125,16 @@ export const joinToRoom = (room, joinedRooms, socket, callback) => {
   }
 };
 
-const getOrSetValues = async (userId, targetUserId) => {
-  try {
-    if (!userId || !targetUserId)
-      throw new AppError("some of the provided id is invalid!", 400);
-
-    // Usar await para obter os valores
-    const roomOneIsNotEmpty = await redis.get(`CHAT-${userId}-${targetUserId}`);
-    const roomTwoIsNotEmpty = await redis.get(`CHAT-${targetUserId}-${userId}`);
-
-    console.log("possiveis rooms", roomOneIsNotEmpty, roomTwoIsNotEmpty);
-
-    let data, room;
-
-    if (roomOneIsNotEmpty) {
-      room = `CHAT-${userId}-${targetUserId}`;
-      data = JSON.parse(roomOneIsNotEmpty);
-    } else if (roomTwoIsNotEmpty) {
-      room = `CHAT-${targetUserId}-${userId}`;
-      data = JSON.parse(roomTwoIsNotEmpty);
-    } else {
-      room = `CHAT-${userId}-${targetUserId}`;
-      const roomObj = {
-        messages: [],
-      };
-      await redis.set(room, JSON.stringify(roomObj));
-      console.log("Novo room criado e salvo.");
-    }
-
-    const userObj = await getUserObj(userId);
-    if (!userObj.rooms.find((el) => el === room)) {
-      userObj.rooms.push(room);
-      redis.set(userId, JSON.stringify(userObj));
-    }
-
-    console.log("Room:", room);
-    console.log("Data:", data);
-    return [room, data];
-  } catch (err) {
-    console.error("Erro ao obter valores ou definir chave:", err);
-  }
-};
-
 //function to be executed on the chat emiter
 export const onChat = (socket, io, userId) => {
-  return async (msg, targetUserId, callback) => {
-    if (userId.toString() === targetUserId) return;
-
-    let room;
+  return async (msg, room, callback) => {
     try {
-      [room] = await getOrSetValues(userId, targetUserId);
+      let targetUserId;
+      if (room.includes("CHAT"))
+        targetUserId = room
+          .split("-")
+          .slice(1)
+          .filter((id) => id !== userId)[0];
 
       console.log("message: " + msg);
       //sending message
@@ -147,7 +156,17 @@ export const onChat = (socket, io, userId) => {
           messageIndex: roomObj.messages.length,
         };
         if (!res[0]?.arrived) {
-          createAndSendChatNotification(userId, targetUserId, io, room, msg);
+          console.log("id do alvo da notificaçao", targetUserId);
+          targetUserId &&
+            (await createAndSendChatNotification(
+              userId,
+              targetUserId,
+              io,
+              room,
+              msg
+            ));
+          targetUserId ||
+            (await createAndSendGroupNotification(userId, io, room, msg));
         }
 
         roomObj.messages.push(message);
@@ -161,54 +180,22 @@ export const onChat = (socket, io, userId) => {
   };
 };
 
-export const onChatWith = (socket, io, userId, joinedRooms) => {
-  return async (targetUserId, callback) => {
-    //verify if the users with the given ids exist
-    try {
-      [...joinedRooms].filter((room) => {
-        if (room.includes("-")) {
-          joinedRooms.delete(room);
-          socket.leave(room);
-        }
-      });
-      const targetUser = await User.findById(targetUserId);
-
-      if (!targetUser) throw new AppError("could not find this user!", 404);
-
-      if (userId.toString() === targetUserId) return;
-
-      //if it's the first time they are chating
-
-      const [room, data] = await getOrSetValues(userId, targetUserId);
-
-      //create room for them
-      if (joinToRoom(room, joinedRooms, socket)) {
-        callback({
-          status: "joined",
-          data: data && generateTemplate(data.messages, userId),
-        });
-      } else {
-        callback({
-          status: "alredy joined",
-          data: data && generateTemplate(data.messages, userId),
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
-  };
-};
-
-export const onJoin = (socket, joinedRooms) => {
+export const onJoin = (socket, joinedRooms, userId) => {
   return (room, callback) => {
-    joinToRoom(room, joinedRooms, socket, callback);
+    [...joinedRooms].filter((room) => {
+      if (room.includes("-")) {
+        joinedRooms.delete(room);
+        socket.leave(room);
+      }
+    });
+    joinToRoom(room, joinedRooms, socket, callback, userId);
   };
 };
 
 export const onIssueInvitations = (socket, io, userId) => {
   return async (participants, room) => {
     console.log("SENDING INVITATIONS!");
+    console.log(room);
     try {
       const { image, name } = await getUserObj(userId);
       await Promise.all([

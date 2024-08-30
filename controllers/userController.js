@@ -66,11 +66,21 @@ export const markNotificationsAsVisualized = catchAsync(
   async (req, res, next) => {
     const userObj = await getUserObj(req.user._id.toString());
 
-    const index = userObj.chatNotifications.findIndex(
-      (el) => el.triggeredBy._id.toString() === req.params.triggeredById
-    );
+    const { serverNotification } = req.query;
 
-    index > -1 && userObj.chatNotifications.splice(index, 1);
+    if (!serverNotification) {
+      const index = userObj.chatNotifications.findIndex(
+        (el) => el.room === req.params.room
+      );
+
+      index > -1 && userObj.chatNotifications.splice(index, 1);
+    } else {
+      const index = userObj.serverNotifications.findIndex(
+        (el) => el.room === req.params.room
+      );
+
+      index > -1 && userObj.serverNotifications.splice(index, 1);
+    }
 
     redis.set(req.user._id.toString(), JSON.stringify(userObj));
     res.status(204).json({
@@ -143,6 +153,7 @@ export const createGroup = catchAsync(async (req, res, next) => {
 });
 
 export const joinToGroup = catchAsync(async (req, res, next) => {
+  console.log("funçao join to group foi chamada");
   const userObj = await getUserObj(req.user._id.toString());
   if (!(await redis.get(req.params.room)))
     return next(new AppError("invalid group room!", 400));
@@ -152,20 +163,29 @@ export const joinToGroup = catchAsync(async (req, res, next) => {
 
   userObj.rooms.push(req.params.room);
 
-  let [, , roomObj] = await Promise.all([
+  console.log("CHEGOU AQUI? 1");
+  console.log(req.params.room);
+
+  let [_, roomObj] = await Promise.all([
     redis.set(req.user._id.toString(), JSON.stringify(userObj)),
     redis.get(req.params.room),
   ]);
+
+  console.log("apenas confirmando", roomObj);
 
   roomObj = roomObj && JSON.parse(roomObj);
 
   const index = roomObj.maybeParticipants.findIndex(
     (el) => el === req.user._id.toString()
   );
+  console.log("CHEGOU AQUI? 2");
+  console.log(roomObj);
+  console.log(index);
 
   if (index > -1) {
     roomObj.maybeParticipants.splice(index, 1);
     roomObj.participants.push(req.user._id.toString());
+    console.log(roomObj);
     await redis.set(req.params.room, JSON.stringify(roomObj));
   } else {
     return next(
@@ -176,6 +196,7 @@ export const joinToGroup = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: "success",
     data: userObj,
+    roomObj,
   });
 });
 

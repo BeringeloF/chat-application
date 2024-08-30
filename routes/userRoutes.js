@@ -14,6 +14,12 @@ router.get("/getMe", authController.protect, userController.getMe);
 
 router.get("/getContacts", authController.protect, userController.getContacts);
 
+router.get(
+  "/joinToGroup/:room",
+  authController.protect,
+  userController.joinToGroup
+);
+
 router.post(
   "/group",
   authController.protect,
@@ -34,7 +40,7 @@ router
   .get(authController.protect, userController.getNotifications);
 
 router.delete(
-  "/notifications/:triggeredById",
+  "/notifications/:room",
   authController.protect,
   userController.markNotificationsAsVisualized
 );

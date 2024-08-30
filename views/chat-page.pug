@@ -30,15 +30,15 @@ html(lang="en")
               i.bell-icon &#x1F514;
         ul.user-list
           each user in users
-            li.user-item(data-user-id=`${user.id}`)
-              -const isGroup = user.image.includes('group')
-              if isGroup
-                img.user-avatar(src=`/img/group/${user.image}`)
-              else 
-                img.user-avatar(src=`/img/users/${user.image}`)
-              .user-name= user.name.split(' ')[0]
-              .user-message-preview Lorem ipsum dolor sit amet...
-            //- Outros usuários
+              li.user-item(data-room=`${user.room}`)
+                img.user-avatar(src=`/img/users/${user.userData.image}`)
+                .user-name= user.userData.name.split(' ')[0]
+                .user-message-preview Lorem ipsum dolor sit amet...
+          each group in groups
+              li.user-item(data-room=`${group.room}`)
+                img.user-avatar(src=`/img/group/${group.groupData.image}`)
+                .user-name= group.groupData.name.split(' ')[0]
+                .user-message-preview Lorem ipsum dolor sit amet...
       .main-content
         h1(class="h1") Search for users
         input(type="text" class="search-bar" placeholder="Buscar...")

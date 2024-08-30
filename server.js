@@ -1,7 +1,6 @@
 import { Server } from "socket.io";
 import {
   onChat,
-  onChatWith,
   onJoin,
   joinToRoom,
   onIssueInvitations,
@@ -20,12 +19,11 @@ mongoose.connect(DB).then(() => {
   console.log("DB connected");
   io.on("connection", (socket) => {
     console.log("a user connected");
-    socket.on("createRoomWithServer", (userId) => {
+    socket.on("createRoomWithServer", async (userId) => {
       let joinedRooms = new Set();
-      joinToRoom(userId, joinedRooms, socket);
-      socket.on("join", onJoin(socket, joinedRooms));
+      await joinToRoom(userId, joinedRooms, socket);
+      socket.on("join", onJoin(socket, joinedRooms, userId));
       socket.on("chat", onChat(socket, io, userId));
-      socket.on("chat with", onChatWith(socket, io, userId, joinedRooms));
       socket.on("issueInvitations", onIssueInvitations(socket, io, userId));
     });
     socket.on("disconnect", () => {

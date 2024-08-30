@@ -1,5 +1,7 @@
 1 salvar mensagems no redis //Feito
 2 pegar mensagems que foram enviadas enquanto o usuario estava desconectado//feito
-3 implementar barra de busca de usarios pelo nome
-4 implementar grupos
-5 implementar funcionalidade de envio de imagems, audio, video e outros arquivos
+3 implementar barra de busca de usarios pelo nome//feito
+4 implementar grupos//feito
+5 implementar funcionalidade de editar informaçoes sobre grupos, adicionar mais pessoas ao grupo, mudar foto de perfil e nome
+do usuario
+6 implementar funcionalidade de envio de imagems, audio, video e outros arquivos//pendente

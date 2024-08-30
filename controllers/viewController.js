@@ -10,15 +10,22 @@ export const getHomePage = catchAsync(async (req, res) => {
     if (arr.includes("CHAT")) {
       arr.splice(0, 1);
       const contact = arr.find((el) => el !== req.user._id.toString());
-      return JSON.parse(await redis.get(contact));
-    } else {
-      return JSON.parse(await redis.get(room));
+      return { userData: JSON.parse(await redis.get(contact)), room };
     }
   });
-  const constactsAndGroups = await Promise.all(contactsPromises);
+
+  const groupsPromises = userObj.rooms.map(async (room) => {
+    if (room.includes("GROUP")) {
+      return { groupData: JSON.parse(await redis.get(room)), room };
+    }
+  });
+  const contacts = await Promise.all(contactsPromises);
+  console.log(contacts);
+  const groups = await Promise.all(groupsPromises);
 
   res.status(200).render("chat-page", {
-    users: constactsAndGroups,
+    users: contacts.filter((el) => el !== undefined),
+    groups: groups.filter((el) => el !== undefined),
   });
 });
 

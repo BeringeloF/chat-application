@@ -11,7 +11,8 @@ export const createGroup = async (data, socket) => {
 
   if (res.data.status === "success") {
     console.log("STATUS === SUCCESS");
+    console.log("ROOM:", res.data.room);
     const { maybeParticipants } = res.data.data;
-    socket.emit("issueInvitations", maybeParticipants, res.room);
+    socket.emit("issueInvitations", maybeParticipants, res.data.room);
   }
 };

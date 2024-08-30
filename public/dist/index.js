@@ -634,8 +634,11 @@ class App {
         const res = await fetch("/api/v1/users/notifications");
         const { data } = await res.json();
         console.log("notifications:", data);
-        if (data.chatNotifications.length > 0) this.#renderChatNotifications(data.chatNotifications);
-        if (data.serverNotifications.length > 0) this.#notificationCountEl.textContent = data.serverNotifications.length;
+        if (data.chatNotifications.length > 0) this.#renderChatNotification(data.chatNotifications);
+        if (data.serverNotifications.length > 0) {
+            this.#notificationCountEl.textContent = data.serverNotifications.length;
+            this.#notificationCountEl.classList.add("show");
+        }
     }
     async #sendMessage(e) {
         e.preventDefault();
@@ -643,9 +646,9 @@ class App {
         const input = document.getElementById("input");
         const chatHeader = document.querySelector(".chat-header");
         if (input.value.trim()) {
-            const targetUserId = chatHeader.getAttribute("data-user-id");
+            const room = chatHeader.getAttribute("data-room");
             try {
-                await this.#socket.timeout(5000).emitWithAck("chat", input.value, targetUserId);
+                await this.#socket.timeout(5000).emitWithAck("chat", input.value, room);
             } catch (err) {
                 console.error("error mine", err);
             }
@@ -681,54 +684,34 @@ class App {
         console.log("invite to room was emited");
     }
     #renderChatNotification(notification) {
-        const markup = `
-     <li class="user-item" data-user-id="${notification.triggeredBy._id}">
-      <img class="user-avatar" src="/img/users/${notification.triggeredBy.photo}" alt="User Avatar">
-      <p class="user-name">${notification.triggeredBy.name.split(" ")[0]}</p>
+        const list = document.querySelector(".user-list");
+        if (Array.isArray(notification)) {
+            const markup = notification.map((el)=>{
+                const userItem = document.querySelector(`.user-item[data-room="${el.room}"]`);
+                if (userItem) list.removeChild(userItem);
+                return `
+     <li class="user-item" data-room="${el.room}">
+      <img class="user-avatar" src="/img/${el?.isFromGroup ? "group" : "users"}/${el?.isFromGroup ? el.groupData.image : el.triggeredBy.photo}" alt="User Avatar">
+      <p class="user-name">${el?.isFromGroup ? el.groupData.name.split(" ")[0] : el.triggeredBy.name.split(" ")[0]}</p>
+      <p class="message-count">${el.totalMessages}</p>
+      <p class="user-message-preview">${el.preview}</p>
+    </li>
+    `;
+            });
+            list.insertAdjacentHTML("afterbegin", markup);
+        } else {
+            const markup = `
+     <li class="user-item" data-room="${notification.room}">
+      <img class="user-avatar" src="/img/${notification?.isFromGroup ? "group" : "users"}/${notification?.isFromGroup ? notification.groupData.image : notification.triggeredBy.photo}" alt="User Avatar">
+      <p class="user-name">${notification?.isFromGroup ? notification.groupData.name.split(" ")[0] : notification.triggeredBy.name.split(" ")[0]}</p>
       <p class="message-count">${notification.totalMessages}</p>
       <p class="user-message-preview">${notification.preview}</p>
     </li>
     `;
-        const userItem = document.querySelector(`.user-item[data-user-id="${notification.triggeredBy._id}"]`);
-        const list = document.querySelector(".user-list");
-        if (userItem) list.removeChild(userItem);
-        list.insertAdjacentHTML("afterbegin", markup);
-    }
-    async #renderChat(e) {
-        const el = e.target.closest(".user-item");
-        if (!el) return;
-        console.log(el.getAttribute("data-user-id"));
-        const src = el.querySelector(".user-avatar").src;
-        const name = el.querySelector(".user-name").textContent;
-        const targetUserId = el.getAttribute("data-user-id");
-        this.#main.innerHTML = "";
-        await (0, _markNotificationsAsVisualizedJs.viewNotification)(targetUserId);
-        el.querySelector(`.user-message-preview`).textContent = "";
-        const chatHeaderMarkup = `
-      <div class="chat-header" data-user-id="${targetUserId}">
-        <img src="${src}" alt="User">
-        <div class="name">${name}</div>
-      </div>
-    `;
-        this.#main.insertAdjacentHTML("afterbegin", chatHeaderMarkup);
-        const res = await this.#socket.timeout(5000).emitWithAck("chat with", targetUserId);
-        if (res.status === "already joined") return;
-        let chatBoxMarkup = `
-      <div class="chat-box"></div>
-    `;
-        if (res.data) chatBoxMarkup = `
-      <div class="chat-box">${res.data}</div>
-      `;
-        this.#main.insertAdjacentHTML("beforeend", chatBoxMarkup);
-        const formMarkup = `
-    <form class="input-box">
-      <input type="text" placeholder="Type a message" id="input">
-      <button type="submit">Send</button>
-    </form>
-   `;
-        this.#main.insertAdjacentHTML("beforeend", formMarkup);
-        const form = this.#main.querySelector(".input-box");
-        form.addEventListener("submit", this.#sendMessage.bind(this));
+            const userItem = document.querySelector(`.user-item[data-room="${notification.room}"]`);
+            if (userItem) list.removeChild(userItem);
+            list.insertAdjacentHTML("afterbegin", markup);
+        }
     }
     #sendLoginForm(e) {
         e.preventDefault();
@@ -797,22 +780,6 @@ class App {
             console.error("\uD83D\uDCA5", err);
         }
     }
-    #renderChatNotifications(notifications) {
-        const list = document.querySelector(".user-list");
-        const markup = notifications.map((el)=>{
-            const userItem = document.querySelector(`.user-item[data-user-id="${el.triggeredBy._id}"]`);
-            if (userItem) list.removeChild(userItem);
-            return `
-      <li class="user-item" data-user-id="${el.triggeredBy._id}">
-        <img class="user-avatar" src="/img/users/${el.triggeredBy.photo}" alt="User Avatar">
-        <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
-        <p class="message-count">${el.totalMessages}</p>
-        <p class="user-message-preview">${el.preview}</p>
-      </li>
-    `;
-        }).join("");
-        list.insertAdjacentHTML("afterbegin", markup);
-    }
     async #doSearch(e) {
         if (e.key !== "Enter") return;
         if (this.#searchBar.value.trim().length === 0) return;
@@ -847,7 +814,9 @@ class App {
         const res = await fetch("/api/v1/users/notifications");
         const { data } = await res.json();
         const notificationsMarkup = data.serverNotifications.map((el)=>{
-            if (el.context === "invite to group") return `<div class="notification-card">
+            if (el.context === "invite to group") {
+                console.log(el);
+                return `<div class="notification-card">
     <div class="user-photo">
         <img src="/img/users/${el.triggeredBy.image}" alt="User Photo">
     </div>
@@ -855,19 +824,23 @@ class App {
         <div class="user-info">
             <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
             <div class="invitation-container">
-              <p>Do you want to accept the invitation to join the group?</p>
+              <p>Do you want to accept ${el.triggeredBy.name.split(" ")[0]}'s invitation to join the group?</p>
               <div class="button-group">
-                  <button class="accept-invitation">Accept</button>
-                  <button class="deny-invitation">Deny</button>
+                  <button class="accept-invitation" data-room="${el.room}" >Accept</button>
+                  <button class="deny-invitation" data-room="${el.room}">Deny</button>
               </div>
         </div>
         </div>
 
     </div>
 </div>`;
+            }
         }).join("");
         const markup = `<div class="notification-container">${notificationsMarkup}</div>`;
         this.#main.innerHTML = markup;
+        const notificationContainer = document.querySelector(".notification-container");
+        notificationContainer.addEventListener("click", this.#agreedToJoin);
+        notificationContainer.addEventListener("click", this.#refuseToJoin);
     }
     #addToGroup(e) {
         if (!e.target.classList.contains("add-contact-btn")) return;
@@ -888,6 +861,74 @@ class App {
             btn.classList.remove("clicked");
             btn.textContent = "+";
         }
+    }
+    async #agreedToJoin(e) {
+        if (!e.target.classList.contains("accept-invitation")) return;
+        const room = e.target.dataset.room;
+        const resJ = await fetch(`/api/v1/users/joinToGroup/${room}`);
+        const res = await resJ.json();
+        console.log(res);
+        console.log("accepting invitation...");
+        await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+    }
+    async #refuseToJoin(e) {
+        if (!e.target.classList.contains("deny-invitation")) return;
+        const room = e.target.dataset.room;
+        await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+        location.assign("/");
+    }
+    async #renderChat(e) {
+        const el = e.target.closest(".user-item");
+        if (!el) return;
+        const src = el.querySelector(".user-avatar").src;
+        const name = el.querySelector(".user-name").textContent;
+        const room = el.getAttribute("data-room");
+        this.#main.innerHTML = "";
+        await (0, _markNotificationsAsVisualizedJs.viewNotification)(room);
+        //el.querySelector(`.user-message-preview`).textContent = "";
+        const chatHeaderMarkup = `
+      <div class="chat-header" data-room="${room}">
+        <img src="${src}" alt="User">
+        <div class="name">${name}</div>
+      </div>
+    `;
+        this.#main.insertAdjacentHTML("afterbegin", chatHeaderMarkup);
+        const res = await this.#socket.timeout(5000).emitWithAck("join", room);
+        if (res.status === "already joined") return;
+        let chatBoxMarkup = `
+      <div class="chat-box"></div>
+    `;
+        if (res.data) chatBoxMarkup = `
+      <div class="chat-box">${this.#generateTemplate(res.data, res.myId)}</div>
+      `;
+        this.#main.insertAdjacentHTML("beforeend", chatBoxMarkup);
+        const formMarkup = `
+    <form class="input-box">
+      <input type="text" placeholder="Type a message" id="input">
+      <button type="submit">Send</button>
+    </form>
+   `;
+        this.#main.insertAdjacentHTML("beforeend", formMarkup);
+        const form = this.#main.querySelector(".input-box");
+        form.addEventListener("submit", this.#sendMessage.bind(this));
+    }
+    #generateTemplate(messages, id) {
+        return messages.map((msg)=>{
+            if (msg.sendBy === id) return `
+        <div class="message sent">
+            <div class="text">
+              ${msg.content}
+            </div>
+        </div>
+      `;
+            return `
+          <div class="message received">
+              <div class="text">
+                ${msg.content}
+              </div>
+          </div>
+        `;
+        }).join(``);
     }
 }
 const app = new App();
@@ -5881,13 +5922,13 @@ parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "viewNotification", ()=>viewNotification);
 var _axios = require("axios");
 var _axiosDefault = parcelHelpers.interopDefault(_axios);
-const viewNotification = async (id)=>{
+const viewNotification = async (room, boolean)=>{
     try {
         const res = await (0, _axiosDefault.default)({
             method: "DELETE",
-            url: `/api/v1/users/notifications/${id}`
+            url: `/api/v1/users/notifications/${room}${boolean ? "?serverNotification=" + boolean : ""}`
         });
-        console.log("notifications from user " + id + " was marked as visualized!");
+        console.log("notifications from the room " + room + " was marked as visualized!");
     } catch (err) {
         console.error(err);
     }
@@ -9367,8 +9408,9 @@ const createGroup = async (data, socket)=>{
     console.log(res);
     if (res.data.status === "success") {
         console.log("STATUS === SUCCESS");
+        console.log("ROOM:", res.data.room);
         const { maybeParticipants } = res.data.data;
-        socket.emit("issueInvitations", maybeParticipants, res.room);
+        socket.emit("issueInvitations", maybeParticipants, res.data.room);
     }
 };
 
