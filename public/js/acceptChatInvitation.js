@@ -1,16 +1,14 @@
 import axios from "axios";
 
-export const addToContacts = async (id) => {
+export const acceptChatInvitation = async (id) => {
   try {
-    const res = await axios({
+    let res = await axios({
       method: "POST",
       url: "/api/v1/users/chat",
       data: { id },
     });
-
-    if (res.status === "success") {
-      location.assign("/");
-    }
+    console.log(res);
+    return res.data.room;
   } catch (err) {
     console.error("error mine", err);
   }

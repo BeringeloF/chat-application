@@ -71,10 +71,11 @@ const handleJWTError = (err) => new AppError(err.message, 401);
 
 const handleJWTExpiredError = () => new AppError("expired token", 401);
 
-export  function errorHandler(err, req, res, next) {
+export function errorHandler(err, req, res, next) {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || "error";
   // NODE_ENV=production nodemon server.js
+  console.log(err);
   if (process.env.NODE_ENV === "development") {
     sendErrorDev(err, req, res);
   } else if (process.env.NODE_ENV === "production") {

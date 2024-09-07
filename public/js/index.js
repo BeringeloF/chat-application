@@ -1,9 +1,11 @@
 import { createGroup } from "./createGroup.js";
+import { updateGroup } from "./updateGroup.js";
 import { login } from "./login.js";
 import { viewNotification } from "./markNotificationsAsVisualized.js";
 import io from "socket.io-client";
 import { search } from "./search.js";
-import { addToContacts } from "./addToContacts.js";
+import { acceptChatInvitation } from "./acceptChatInvitation.js";
+import { denyGroupInvitation } from "./denyGroupInvitation.js";
 
 class App {
   #socket = io();
@@ -15,6 +17,7 @@ class App {
   #searchBar = document.querySelector(".search-bar");
   #searchResults = document.querySelector(".search-results");
   #bellIcon = document.querySelector(".bell-icon");
+  #myId;
 
   constructor() {
     if (!this.#loginForm) {
@@ -33,6 +36,10 @@ class App {
     this.#usersContainer?.addEventListener(
       "click",
       this.#renderChat.bind(this)
+    );
+    this.#usersContainer?.addEventListener(
+      "click",
+      this.#renderEditGroupForm.bind(this)
     );
     this.#loginForm?.addEventListener("submit", this.#sendLoginForm.bind(this));
     this.#openCreateFormBtn?.addEventListener(
@@ -60,7 +67,7 @@ class App {
     console.log(userId);
 
     if (!userId) return;
-
+    this.#myId == userId.userId;
     this.#socket.emit("createRoomWithServer", userId.userId);
   }
 
@@ -105,15 +112,31 @@ class App {
   }
 
   #renderMessage(msg, callback) {
-    callback({ arrived: true });
+    callback({ arrived: true, id: this.#myId });
     const messages = document.querySelector(".chat-box");
-    const markup = `
+    let markup;
+
+    if (msg.isFromGroup) {
+      console.log("a messagem foi enviada de um grupo");
+      console.log(msg);
+      markup = `<div class="message received">
+         <div>${msg.sendedBy.name}</div>
+          <div class="text">
+            ${msg.content}
+          </div>
+      </div>`;
+    } else {
+      console.log("a messagem não foi enviada de um grupo");
+      console.log(msg);
+      markup = `
       <div class="message received">
           <div class="text">
-            ${msg}
+            ${msg.content}
           </div>
       </div>
     `;
+    }
+
     messages.insertAdjacentHTML("beforeend", markup);
     window.scrollTo(0, document.body.scrollHeight);
   }
@@ -222,6 +245,7 @@ class App {
     try {
       const res = await fetch("/api/v1/users/getContacts");
       const { data } = await res.json();
+      console.log(data);
       const contactsMarkup = data
         .map((el) => {
           return `
@@ -284,7 +308,8 @@ class App {
     if (!el) return;
     const id = el.getAttribute("data-user-id");
     console.log(id);
-    addToContacts(id);
+
+    this.#socket.emit("sendChatInvitation", id);
   }
 
   async #renderServerNotifications() {
@@ -320,6 +345,31 @@ class App {
 
     </div>
 </div>`;
+        } else if ((el.context = "invite to chat")) {
+          return `<div class="notification-card">
+    <div class="user-photo">
+        <img src="/img/users/${el.triggeredBy.image}" alt="User Photo">
+    </div>
+    <div class="notification-content">
+        <div class="user-info">
+            <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
+            <div class="invitation-container">
+              <p>Do you want to accept ${
+                el.triggeredBy.name.split(" ")[0]
+              }'s invitation to join the group?</p>
+              <div class="button-group">
+                  <button class="accept-invitation" data-user-id="${
+                    el.triggeredBy.id
+                  }" >Accept</button>
+                  <button class="deny-invitation" data-user-id="${
+                    el.triggeredBy.id
+                  }">Deny</button>
+              </div>
+        </div>
+        </div>
+
+    </div>
+</div>`;
         }
       })
       .join("");
@@ -328,8 +378,14 @@ class App {
     const notificationContainer = document.querySelector(
       ".notification-container"
     );
-    notificationContainer.addEventListener("click", this.#agreedToJoin);
-    notificationContainer.addEventListener("click", this.#refuseToJoin);
+    notificationContainer.addEventListener(
+      "click",
+      this.#agreedToJoin.bind(this)
+    );
+    notificationContainer.addEventListener(
+      "click",
+      this.#refuseToJoin.bind(this)
+    );
   }
 
   #addToGroup(e) {
@@ -356,24 +412,39 @@ class App {
 
   async #agreedToJoin(e) {
     if (!e.target.classList.contains("accept-invitation")) return;
-    const room = e.target.dataset.room;
-    const resJ = await fetch(`/api/v1/users/joinToGroup/${room}`);
-    const res = await resJ.json();
-    console.log(res);
+    if (!e.target.dataset.userId) {
+      const room = e.target.dataset.room;
+      const resJ = await fetch(`/api/v1/users/joinToGroup/${room}`);
+      const res = await resJ.json();
+      console.log(res);
+      await viewNotification(room, true);
+    } else {
+      const id = e.target.dataset.userId;
+      const room = await acceptChatInvitation(id);
+      await viewNotification(room, true);
+    }
     console.log("accepting invitation...");
-    await viewNotification(room, true);
   }
 
   async #refuseToJoin(e) {
     if (!e.target.classList.contains("deny-invitation")) return;
-    const room = e.target.dataset.room;
-    await viewNotification(room, true);
-    location.assign("/");
+    if (!e.target.dataset.userId) {
+      const room = e.target.dataset.room;
+      console.log(room);
+      await denyGroupInvitation(room);
+      await viewNotification(room, true);
+      location.assign("/");
+    } else {
+      const id = e.target.dataset.userId;
+      console.log(this.#myId);
+      const room = `CHAT-${id}-${this.#myId}`;
+      await viewNotification(room, true);
+    }
   }
 
   async #renderChat(e) {
     const el = e.target.closest(".user-item");
-    if (!el) return;
+    if (!el || e.target.classList.contains("user-avatar")) return;
 
     const src = el.querySelector(".user-avatar").src;
     const name = el.querySelector(".user-name").textContent;
@@ -421,9 +492,10 @@ class App {
   }
 
   #generateTemplate(messages, id) {
+    console.log(messages);
     return messages
       .map((msg) => {
-        if (msg.sendBy === id) {
+        if (msg.sendedBy.id === id) {
           return `
         <div class="message sent">
             <div class="text">
@@ -434,6 +506,7 @@ class App {
         }
         return `
           <div class="message received">
+           ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ""}
               <div class="text">
                 ${msg.content}
               </div>
@@ -441,6 +514,80 @@ class App {
         `;
       })
       .join(``);
+  }
+
+  async #renderEditGroupForm(e) {
+    const room = e.target.closest(".user-item").dataset.room;
+    if (!room.includes("GROUP") || !e.target.classList.contains("user-avatar"))
+      return;
+
+    const groupJson = await fetch(`/api/v1/users/group/${room}`);
+    const groupData = (await groupJson.json()).data;
+    const res = await fetch("/api/v1/users/getContacts");
+    const { data } = await res.json();
+
+    const contacts = data.filter(
+      (el) =>
+        !groupData.participants.includes(el.id) &&
+        !groupData.maybeParticipants.includes(el.id)
+    );
+
+    const contactsMarkup = contacts
+      .map((el) => {
+        return `
+       <li data-user-id="${el.id}">
+            <img class="user-avatar"src="/img/users/${el.image}">
+            <span class="contact-name">${el.name.split(" ")[0]}</span>
+            <button class="add-contact-btn">+</button>
+       </li>`;
+      })
+      .join("");
+
+    this.#main.innerHTML = "";
+
+    const editGroupFormMarkup = `
+    <div class="div"> 
+    <div class="form-container">
+          <h2>Editar Grupo </h2>
+          <form class='create-group-form' enctype="multipart/form-data">
+              <div class="form-group">
+                  <label for="group-name">Nome do Grupo:</label>
+                  <input type="text" id="group-name" name="name" value="${groupData.name}">
+              </div>
+              <div class="form-group">
+                  <label for="group-description">Descrição do Grupo:</label>
+                  <textarea id="group-description" name="description"></textarea>
+              </div>
+              <div class="form-group">
+                  <label for="group-image">Selecione uma nova imagem caso queira alterar a foto do grupo:</label>
+                  <input type="file" id="group-image" name="image" accept="image/*">
+              </div>
+             <input type="hidden" name="participants" id="hidden-input" value="">
+              <div class="form-group">
+                  <button type="submit">Salvar</button>
+              </div>
+          </form>
+      </div>
+
+      <div class="contacts-container">
+          <h3>Adcionar mais pessoas</h3>
+          <ul class="contact-list">
+             ${contactsMarkup}
+          </ul>
+      </div>
+    </div>
+    `;
+    this.#main.insertAdjacentHTML("afterbegin", editGroupFormMarkup);
+    const listContainer = document.querySelector(".contact-list");
+    listContainer.addEventListener("click", this.#addToGroup.bind(this));
+    const editGroupForm = this.#main.querySelector(".create-group-form");
+    editGroupForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(editGroupForm);
+      console.log("ROOM", room);
+      updateGroup(formData, this.#socket, room);
+      console.log("trying to edit group...");
+    });
   }
 }
 

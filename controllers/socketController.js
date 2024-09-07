@@ -1,6 +1,6 @@
 import User from "../db/userModel.js";
 import Redis from "ioredis";
-import getUserObj from "../helpers/getUserObj.js";
+import { getUserObj, getRoomObj } from "../helpers/getObjFromRedis.js";
 
 export const redis = new Redis();
 redis.on("error", (err) => {
@@ -15,6 +15,10 @@ const createAndSendChatNotification = async (
   msg
 ) => {
   try {
+    console.log(
+      "UMA NOTIFICAÇAO FOI CHAMADA PARA SER EMITIDA PARA O CHAT",
+      room
+    );
     const userObj = await getUserObj(targetUserId);
 
     const triggeredByUser = await User.findById(userId);
@@ -57,10 +61,21 @@ const createAndSendChatNotification = async (
   }
 };
 
-const createAndSendGroupNotification = async (userId, io, room, msg) => {
+const createAndSendGroupNotification = async (
+  userId,
+  io,
+  room,
+  msg,
+  doNotSendToThisIds
+) => {
+  console.log(
+    "UMA NOTIFICAÇAO FOI CHAMADA PARA SER EMITIDA PARA O GRUPO",
+    room
+  );
   let group = await redis.get(room);
   group = group && JSON.parse(group);
   const { participants } = group;
+
   const notificationObj = {
     room,
     groupData: group,
@@ -70,8 +85,10 @@ const createAndSendGroupNotification = async (userId, io, room, msg) => {
     totalMessages: 1,
     isFromGroup: true,
   };
+
   participants
     .filter((id) => id !== userId)
+    .filter((id) => !doNotSendToThisIds.includes(id))
     .forEach(async (id) => {
       const userObj = await getUserObj(id);
       const notificationIndex = userObj.chatNotifications.findIndex(
@@ -137,11 +154,20 @@ export const onChat = (socket, io, userId) => {
           .filter((id) => id !== userId)[0];
 
       console.log("message: " + msg);
+
+      const user = await getUserObj(userId);
+      const message = {
+        sendedBy: { name: user.name, id: userId },
+        content: msg,
+        sendedAt: Date.now(),
+      };
+
+      message.isFromGroup = targetUserId ? false : true;
       //sending message
       const res = await socket.broadcast
         .to(room)
         .timeout(5000)
-        .emitWithAck("chat", msg);
+        .emitWithAck("chat", message);
       console.log("RESPOSTA:", res);
       redis.get(room, async (err, reply) => {
         if (err) {
@@ -149,24 +175,28 @@ export const onChat = (socket, io, userId) => {
         }
         console.log(reply);
         const roomObj = reply && JSON.parse(reply);
-        const message = {
-          content: msg,
-          sendAt: Date.now(),
-          sendBy: userId,
-          messageIndex: roomObj.messages.length,
-        };
-        if (!res[0]?.arrived) {
+
+        message.messageIndex = roomObj.messages.length;
+
+        if (targetUserId && !res[0]?.arrived) {
           console.log("id do alvo da notificaçao", targetUserId);
-          targetUserId &&
-            (await createAndSendChatNotification(
-              userId,
-              targetUserId,
-              io,
-              room,
-              msg
-            ));
-          targetUserId ||
-            (await createAndSendGroupNotification(userId, io, room, msg));
+
+          await createAndSendChatNotification(
+            userId,
+            targetUserId,
+            io,
+            room,
+            msg
+          );
+        } else if (res?.length < roomObj.participants?.length - 1) {
+          const doNotSendToThisIds = res.map((el) => el.id);
+          await createAndSendGroupNotification(
+            userId,
+            io,
+            room,
+            msg,
+            doNotSendToThisIds
+          );
         }
 
         roomObj.messages.push(message);
@@ -189,6 +219,27 @@ export const onJoin = (socket, joinedRooms, userId) => {
       }
     });
     joinToRoom(room, joinedRooms, socket, callback, userId);
+  };
+};
+
+export const onSendChatInvitation = (io, userId) => {
+  return async (targetUserId) => {
+    if (userId === targetUserId) return;
+    const { image, name } = await getUserObj(userId);
+    const notification = {
+      triggeredBy: {
+        id: userId,
+        image,
+        name,
+      },
+      context: "invite to chat",
+      sendedAt: Date.now(),
+      targetUserId,
+    };
+    const targetUserObj = await getUserObj(targetUserId);
+    targetUserObj.serverNotifications.push(notification);
+    io.to(targetUserId).emit("serverNotification", notification);
+    redis.set(targetUserId, JSON.stringify(targetUserObj));
   };
 };
 
@@ -221,7 +272,6 @@ export const onIssueInvitations = (socket, io, userId) => {
       ]);
     } catch (err) {
       console.error("ERROR MINE", err);
-      socket.emit("appError", err);
     }
   };
 };

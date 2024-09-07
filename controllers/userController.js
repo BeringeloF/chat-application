@@ -3,7 +3,7 @@ import catchAsync from "../helpers/catchAsync.js";
 import { AppError } from "../helpers/appError.js";
 import { redis } from "./socketController.js";
 import multer from "multer";
-import getUserObj from "../helpers/getUserObj.js";
+import { getUserObj, getRoomObj } from "../helpers/getObjFromRedis.js";
 import path from "node:path";
 
 export const getUsers = catchAsync(async (req, res, next) => {
@@ -12,11 +12,16 @@ export const getUsers = catchAsync(async (req, res, next) => {
     filter = { $text: { $search: req.query.search } };
   }
   const users = await User.find(filter);
+
+  const temp = users.filter((user) => user._id !== req.user._id);
+
+  console.log(temp);
+
   res.status(200).json({
     status: "success",
     results: users.length,
     data: {
-      users,
+      users: users.filter((user) => user._id !== req.user._id),
     },
   });
 });
@@ -75,8 +80,15 @@ export const markNotificationsAsVisualized = catchAsync(
 
       index > -1 && userObj.chatNotifications.splice(index, 1);
     } else {
+      console.log(req.params);
+      const id = req.params.room
+        .split("-")
+        .slice(1)
+        .filter((id) => id !== req.user._id.toString())[0];
+
+      console.log(userObj.name, userObj.serverNotifications, id);
       const index = userObj.serverNotifications.findIndex(
-        (el) => el.room === req.params.room
+        (el) => el.room === req.params.room || el.triggeredBy.id === id
       );
 
       index > -1 && userObj.serverNotifications.splice(index, 1);
@@ -124,10 +136,12 @@ export const createGroup = catchAsync(async (req, res, next) => {
   const participants = req.body.participants
     .trim()
     .split(" ")
+    .filter((id) => id !== "")
     .map((id) => id);
   const roomObj = {
     name: req.body.name,
     image: req.file.filename,
+    description: req.body.description,
     messages: [],
     maybeParticipants: [...participants],
     participants: [req.user._id.toString()],
@@ -149,6 +163,34 @@ export const createGroup = catchAsync(async (req, res, next) => {
     message: "group created successfuly!",
     room,
     data: roomObj,
+  });
+});
+
+export const updateGroup = catchAsync(async (req, res, next) => {
+  const groupObj = await getRoomObj(req.params.room);
+  req.body.participants = req.body.participants
+    .trim()
+    .split(" ")
+    .filter((id) => id !== "");
+
+  const newParticipants = req.body.participants.filter(
+    (id) =>
+      !groupObj.participants.includes(id) &&
+      !groupObj.maybeParticipants.includes(id)
+  );
+
+  const participants = [...newParticipants, ...groupObj.maybeParticipants];
+
+  if (req.file) groupObj.image = req.file.filename;
+
+  groupObj.name = req.body.name || groupObj.name;
+  groupObj.description = req.body.description || groupObj.description;
+  groupObj.maybeParticipants = participants;
+
+  redis.set(req.params.room, JSON.stringify(groupObj));
+  res.status(200).json({
+    status: "success",
+    data: groupObj,
   });
 });
 
@@ -210,7 +252,7 @@ export const getContacts = catchAsync(async (req, res, next) => {
       return JSON.parse(await redis.get(contact));
     }
   });
-  const contacts = await Promise.all(contactsPromises);
+  const contacts = (await Promise.all(contactsPromises)).filter((el) => el);
   res.status(200).json({
     status: "success",
     data: contacts,
@@ -219,6 +261,13 @@ export const getContacts = catchAsync(async (req, res, next) => {
 
 export const createChat = catchAsync(async (req, res, next) => {
   console.log(req.body);
+  if (req.body.id === req.user._id.toString())
+    return next(
+      new AppError(
+        "Error!, why are you trying to create a chat with yourself?",
+        400
+      )
+    );
   const targetUser = await User.findById(req.body.id);
   if (!targetUser) return next(new AppError("this user does not exist!", 404));
   const room = `CHAT-${req.user._id}-${targetUser._id}`;
@@ -248,5 +297,73 @@ export const createChat = catchAsync(async (req, res, next) => {
   res.status(201).json({
     status: "success",
     room,
+  });
+});
+
+export const getGroup = catchAsync(async (req, res, next) => {
+  const groupJson = await redis.get(req.params.room);
+  if (!groupJson) return next(new AppError("could not find this group!", 404));
+  const group = JSON.parse(groupJson);
+
+  res.status(200).json({
+    status: "success",
+    data: group,
+  });
+});
+
+export const deleteMessages = catchAsync(async (req, res, next) => {
+  const room = req.params.room;
+  const roomObj = await getRoomObj(room);
+  roomObj.messages = [];
+  await redis.set(room, JSON.stringify(roomObj));
+
+  res.status(204).json({
+    status: "success",
+    data: null,
+  });
+});
+
+export const deleteNotifications = catchAsync(async (req, res, next) => {
+  const userObj = await getUserObj(req.params.id);
+  userObj.chatNotifications = [];
+  userObj.serverNotifications = [];
+
+  await redis.set(req.params.id, JSON.stringify(userObj));
+
+  res.status(204).json({
+    status: "success",
+    data: null,
+  });
+});
+
+export const denyGroupInvitation = catchAsync(async (req, res, next) => {
+  const groupObj = await getRoomObj(req.body.room);
+
+  groupObj.maybeParticipants = groupObj.maybeParticipants.filter(
+    (id) => id !== req.user._id.toString()
+  );
+
+  redis.set(req.body.room, JSON.stringify(groupObj));
+
+  res.status(200).json({
+    status: "success",
+  });
+});
+
+export const removeInviteToGroup = catchAsync(async (req, res, next) => {
+  const groupObj = await getRoomObj(req.params.room);
+
+  if (!groupObj.maybeParticipants.includes(req.params.userId))
+    return next(
+      new AppError("there is no invite this user on the group!", 404)
+    );
+
+  groupObj.maybeParticipants = groupObj.maybeParticipants.filter(
+    (id) => id !== req.params.userId
+  );
+  redis.set(req.params.room, JSON.stringify(groupObj));
+  res.status(204).json({
+    status: "success",
+    data: null,
   });
 });

@@ -1,6 +1,6 @@
 import catchAsync from "../helpers/catchAsync.js";
 import User from "../db/userModel.js";
-import getUserObj from "../helpers/getUserObj.js";
+import { getUserObj, getRoomObj } from "../helpers/getObjFromRedis.js";
 import { redis } from "./socketController.js";
 
 export const getHomePage = catchAsync(async (req, res) => {

@@ -586,12 +586,14 @@ function hmrAccept(bundle /*: ParcelRequire */ , id /*: string */ ) {
 },{}],"f2QDv":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 var _createGroupJs = require("./createGroup.js");
+var _updateGroupJs = require("./updateGroup.js");
 var _loginJs = require("./login.js");
 var _markNotificationsAsVisualizedJs = require("./markNotificationsAsVisualized.js");
 var _socketIoClient = require("socket.io-client");
 var _socketIoClientDefault = parcelHelpers.interopDefault(_socketIoClient);
 var _searchJs = require("./search.js");
-var _addToContactsJs = require("./addToContacts.js");
+var _acceptChatInvitationJs = require("./acceptChatInvitation.js");
+var _denyGroupInvitationJs = require("./denyGroupInvitation.js");
 class App {
     #socket = (0, _socketIoClientDefault.default)();
     #usersContainer = document.querySelector(".user-list");
@@ -602,6 +604,7 @@ class App {
     #searchBar = document.querySelector(".search-bar");
     #searchResults = document.querySelector(".search-results");
     #bellIcon = document.querySelector(".bell-icon");
+    #myId;
     constructor(){
         if (!this.#loginForm) {
             this.#createPriviteRoomWithServer();
@@ -615,6 +618,7 @@ class App {
             this.#notificationCountEl.classList.add("show");
         });
         this.#usersContainer?.addEventListener("click", this.#renderChat.bind(this));
+        this.#usersContainer?.addEventListener("click", this.#renderEditGroupForm.bind(this));
         this.#loginForm?.addEventListener("submit", this.#sendLoginForm.bind(this));
         this.#openCreateFormBtn?.addEventListener("click", this.#openCreateGroupForm.bind(this));
         this.#bellIcon && this.#bellIcon.addEventListener("click", this.#renderServerNotifications.bind(this));
@@ -628,6 +632,7 @@ class App {
         const userId = await res.json();
         console.log(userId);
         if (!userId) return;
+        this.#myId, userId.userId;
         this.#socket.emit("createRoomWithServer", userId.userId);
     }
     async #getNotifications() {
@@ -666,16 +671,31 @@ class App {
     }
     #renderMessage(msg, callback) {
         callback({
-            arrived: true
+            arrived: true,
+            id: this.#myId
         });
         const messages = document.querySelector(".chat-box");
-        const markup = `
+        let markup;
+        if (msg.isFromGroup) {
+            console.log("a messagem foi enviada de um grupo");
+            console.log(msg);
+            markup = `<div class="message received">
+         <div>${msg.sendedBy.name}</div>
+          <div class="text">
+            ${msg.content}
+          </div>
+      </div>`;
+        } else {
+            console.log("a messagem n\xe3o foi enviada de um grupo");
+            console.log(msg);
+            markup = `
       <div class="message received">
           <div class="text">
-            ${msg}
+            ${msg.content}
           </div>
       </div>
     `;
+        }
         messages.insertAdjacentHTML("beforeend", markup);
         window.scrollTo(0, document.body.scrollHeight);
     }
@@ -757,6 +777,7 @@ class App {
         try {
             const res = await fetch("/api/v1/users/getContacts");
             const { data } = await res.json();
+            console.log(data);
             const contactsMarkup = data.map((el)=>{
                 return `
        <li data-user-id="${el.id}">
@@ -806,7 +827,7 @@ class App {
         if (!el) return;
         const id = el.getAttribute("data-user-id");
         console.log(id);
-        (0, _addToContactsJs.addToContacts)(id);
+        this.#socket.emit("sendChatInvitation", id);
     }
     async #renderServerNotifications() {
         this.#main.innerHTML = "";
@@ -834,13 +855,33 @@ class App {
 
     </div>
 </div>`;
+            } else {
+                el.context = "invite to chat";
+                return `<div class="notification-card">
+    <div class="user-photo">
+        <img src="/img/users/${el.triggeredBy.image}" alt="User Photo">
+    </div>
+    <div class="notification-content">
+        <div class="user-info">
+            <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
+            <div class="invitation-container">
+              <p>Do you want to accept ${el.triggeredBy.name.split(" ")[0]}'s invitation to join the group?</p>
+              <div class="button-group">
+                  <button class="accept-invitation" data-user-id="${el.triggeredBy.id}" >Accept</button>
+                  <button class="deny-invitation" data-user-id="${el.triggeredBy.id}">Deny</button>
+              </div>
+        </div>
+        </div>
+
+    </div>
+</div>`;
             }
         }).join("");
         const markup = `<div class="notification-container">${notificationsMarkup}</div>`;
         this.#main.innerHTML = markup;
         const notificationContainer = document.querySelector(".notification-container");
-        notificationContainer.addEventListener("click", this.#agreedToJoin);
-        notificationContainer.addEventListener("click", this.#refuseToJoin);
+        notificationContainer.addEventListener("click", this.#agreedToJoin.bind(this));
+        notificationContainer.addEventListener("click", this.#refuseToJoin.bind(this));
     }
     #addToGroup(e) {
         if (!e.target.classList.contains("add-contact-btn")) return;
@@ -864,22 +905,37 @@ class App {
     }
     async #agreedToJoin(e) {
         if (!e.target.classList.contains("accept-invitation")) return;
-        const room = e.target.dataset.room;
-        const resJ = await fetch(`/api/v1/users/joinToGroup/${room}`);
-        const res = await resJ.json();
-        console.log(res);
+        if (!e.target.dataset.userId) {
+            const room = e.target.dataset.room;
+            const resJ = await fetch(`/api/v1/users/joinToGroup/${room}`);
+            const res = await resJ.json();
+            console.log(res);
+            await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+        } else {
+            const id = e.target.dataset.userId;
+            const room = await (0, _acceptChatInvitationJs.acceptChatInvitation)(id);
+            await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+        }
         console.log("accepting invitation...");
-        await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
     }
     async #refuseToJoin(e) {
         if (!e.target.classList.contains("deny-invitation")) return;
-        const room = e.target.dataset.room;
-        await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
-        location.assign("/");
+        if (!e.target.dataset.userId) {
+            const room = e.target.dataset.room;
+            console.log(room);
+            await (0, _denyGroupInvitationJs.denyGroupInvitation)(room);
+            await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+            location.assign("/");
+        } else {
+            const id = e.target.dataset.userId;
+            console.log(this.#myId);
+            const room = `CHAT-${id}-${this.#myId}`;
+            await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+        }
     }
     async #renderChat(e) {
         const el = e.target.closest(".user-item");
-        if (!el) return;
+        if (!el || e.target.classList.contains("user-avatar")) return;
         const src = el.querySelector(".user-avatar").src;
         const name = el.querySelector(".user-name").textContent;
         const room = el.getAttribute("data-room");
@@ -913,8 +969,9 @@ class App {
         form.addEventListener("submit", this.#sendMessage.bind(this));
     }
     #generateTemplate(messages, id) {
+        console.log(messages);
         return messages.map((msg)=>{
-            if (msg.sendBy === id) return `
+            if (msg.sendedBy.id === id) return `
         <div class="message sent">
             <div class="text">
               ${msg.content}
@@ -923,6 +980,7 @@ class App {
       `;
             return `
           <div class="message received">
+           ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ""}
               <div class="text">
                 ${msg.content}
               </div>
@@ -930,10 +988,71 @@ class App {
         `;
         }).join(``);
     }
+    async #renderEditGroupForm(e) {
+        const room = e.target.closest(".user-item").dataset.room;
+        if (!room.includes("GROUP") || !e.target.classList.contains("user-avatar")) return;
+        const groupJson = await fetch(`/api/v1/users/group/${room}`);
+        const groupData = (await groupJson.json()).data;
+        const res = await fetch("/api/v1/users/getContacts");
+        const { data } = await res.json();
+        const contacts = data.filter((el)=>!groupData.participants.includes(el.id) && !groupData.maybeParticipants.includes(el.id));
+        const contactsMarkup = contacts.map((el)=>{
+            return `
+       <li data-user-id="${el.id}">
+            <img class="user-avatar"src="/img/users/${el.image}">
+            <span class="contact-name">${el.name.split(" ")[0]}</span>
+            <button class="add-contact-btn">+</button>
+       </li>`;
+        }).join("");
+        this.#main.innerHTML = "";
+        const editGroupFormMarkup = `
+    <div class="div"> 
+    <div class="form-container">
+          <h2>Editar Grupo </h2>
+          <form class='create-group-form' enctype="multipart/form-data">
+              <div class="form-group">
+                  <label for="group-name">Nome do Grupo:</label>
+                  <input type="text" id="group-name" name="name" value="${groupData.name}">
+              </div>
+              <div class="form-group">
+                  <label for="group-description">Descri\xe7\xe3o do Grupo:</label>
+                  <textarea id="group-description" name="description"></textarea>
+              </div>
+              <div class="form-group">
+                  <label for="group-image">Selecione uma nova imagem caso queira alterar a foto do grupo:</label>
+                  <input type="file" id="group-image" name="image" accept="image/*">
+              </div>
+             <input type="hidden" name="participants" id="hidden-input" value="">
+              <div class="form-group">
+                  <button type="submit">Salvar</button>
+              </div>
+          </form>
+      </div>
+
+      <div class="contacts-container">
+          <h3>Adcionar mais pessoas</h3>
+          <ul class="contact-list">
+             ${contactsMarkup}
+          </ul>
+      </div>
+    </div>
+    `;
+        this.#main.insertAdjacentHTML("afterbegin", editGroupFormMarkup);
+        const listContainer = document.querySelector(".contact-list");
+        listContainer.addEventListener("click", this.#addToGroup.bind(this));
+        const editGroupForm = this.#main.querySelector(".create-group-form");
+        editGroupForm.addEventListener("submit", async (e)=>{
+            e.preventDefault();
+            const formData = new FormData(editGroupForm);
+            console.log("ROOM", room);
+            (0, _updateGroupJs.updateGroup)(formData, this.#socket, room);
+            console.log("trying to edit group...");
+        });
+    }
 }
 const app = new App();
 
-},{"./login.js":"7yHem","./markNotificationsAsVisualized.js":"hM2ud","socket.io-client":"8HBJR","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./createGroup.js":"4JOGA","./search.js":"1VcuN","./addToContacts.js":"l4d3w"}],"7yHem":[function(require,module,exports) {
+},{"./login.js":"7yHem","./markNotificationsAsVisualized.js":"hM2ud","socket.io-client":"8HBJR","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./createGroup.js":"4JOGA","./search.js":"1VcuN","./updateGroup.js":"7qv5M","./acceptChatInvitation.js":"45gKo","./denyGroupInvitation.js":"ata0E"}],"7yHem":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "login", ()=>login);
@@ -9434,25 +9553,68 @@ const search = async (data)=>{
     return res;
 };
 
-},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"l4d3w":[function(require,module,exports) {
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"7qv5M":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "addToContacts", ()=>addToContacts);
+parcelHelpers.export(exports, "updateGroup", ()=>updateGroup);
 var _axios = require("axios");
 var _axiosDefault = parcelHelpers.interopDefault(_axios);
-const addToContacts = async (id)=>{
+const updateGroup = async (data, socket, room)=>{
     try {
         const res = await (0, _axiosDefault.default)({
+            method: "PATCH",
+            url: `/api/v1/users/group/${room}`,
+            data
+        });
+        console.log(res);
+        if (res.data.status === "success") {
+            console.log("STATUS === SUCCESS");
+            console.log("ROOM:", room);
+            const { maybeParticipants } = res.data.data;
+            socket.emit("issueInvitations", maybeParticipants, room);
+        }
+    } catch (err) {
+        console.error("ERROR MINE", err);
+    }
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"45gKo":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "acceptChatInvitation", ()=>acceptChatInvitation);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const acceptChatInvitation = async (id)=>{
+    try {
+        let res = await (0, _axiosDefault.default)({
             method: "POST",
             url: "/api/v1/users/chat",
             data: {
                 id
             }
         });
-        if (res.status === "success") location.assign("/");
+        console.log(res);
+        return res.data.room;
     } catch (err) {
         console.error("error mine", err);
     }
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"ata0E":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "denyGroupInvitation", ()=>denyGroupInvitation);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const denyGroupInvitation = async (room)=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "POST",
+        url: "/api/v1/users/denyGroupInvitation",
+        data: {
+            room
+        }
+    });
+    console.log("deny invitation", res);
 };
 
 },{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["hhrAs","f2QDv"], "f2QDv", "parcelRequire1ab2")
