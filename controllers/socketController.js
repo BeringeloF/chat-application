@@ -53,7 +53,6 @@ const createAndSendChatNotification = async (
     }
     //saving the target userObj with the newest notification
     await redis.set(targetUserId, JSON.stringify(userObj));
-    console.log(io);
     console.log(targetUserId);
     io.to(targetUserId).emit("chatNotification", notificationObj);
   } catch (err) {
@@ -127,7 +126,19 @@ export const joinToRoom = async (
       const roomObj = roomJson && JSON.parse(roomJson);
       const callbackObj = { status: "joined" };
       if (userId) {
-        callbackObj.data = roomObj.messages;
+        const index = roomObj.doNotShowMessagesBeforeDateToThisUsers.findIndex(
+          (el) => el.user === userId
+        );
+        const messages =
+          index > -1
+            ? roomObj.messages.filter(
+                (msg) =>
+                  msg.sendedAt >
+                  roomObj.doNotShowMessagesBeforeDateToThisUsers[index].date
+              )
+            : roomObj.messages;
+
+        callbackObj.data = messages;
         callbackObj.myId = userId;
       }
       if (callback) callback(callbackObj);

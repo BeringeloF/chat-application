@@ -68,4 +68,12 @@ router.delete(
   "/removeInviteToGroup/:room/:userId",
   userController.removeInviteToGroup
 );
+
+router.delete(
+  "/deleteMessages/:room",
+  authController.protect,
+  userController.deleteMessagesUI
+);
+
+router.delete("/deleteGroup/:room", userController.deleteGroup);
 router.route("/:userId").get(userController.getUser);

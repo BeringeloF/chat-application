@@ -31,12 +31,52 @@ html(lang="en")
         ul.user-list
           each user in users
               li.user-item(data-room=`${user.room}`)
-                img.user-avatar(src=`/img/users/${user.userData.image}`)
+                button.user-dropdown-trigger
+                  img.user-avatar(src=`/img/users/${user.userData.image}` alt="User Avatar")
+                div.user-dropdown-content
+                  div.user-dropdown-item
+                    svg.icon(xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                      path(d="M17 16l4-4-4-4M21 12H9")
+                    span Leave the group
+                  
+                  div.user-dropdown-item
+                    svg.icon(xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                      path(d="M12 20h9")
+                      path(d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z")
+                    span Update group
+                  
+                  div.user-dropdown-item
+                    svg.icon(xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                      circle(cx="12" cy="12" r="10")
+                      path(d="M12 16v-4")
+                      path(d="M12 8h.01")
+                    span Show more info
+
                 .user-name= user.userData.name.split(' ')[0]
                 .user-message-preview Lorem ipsum dolor sit amet...
           each group in groups
               li.user-item(data-room=`${group.room}`)
-                img.user-avatar(src=`/img/group/${group.groupData.image}`)
+                button.user-dropdown-trigger
+                 img.user-avatar(src=`/img/group/${group.groupData.image}` alt="User Avatar")
+
+                div.user-dropdown-content
+                  div.user-dropdown-item
+                    svg.icon(xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                      path(d="M17 16l4-4-4-4M21 12H9")
+                    span Leave the group
+                  
+                  div.user-dropdown-item
+                    svg.icon(xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                      path(d="M12 20h9")
+                      path(d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z")
+                    span Update group
+                  
+                  div.user-dropdown-item
+                    svg.icon(xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+                      circle(cx="12" cy="12" r="10")
+                      path(d="M12 16v-4")
+                      path(d="M12 8h.01")
+                    span Show more info
                 .user-name= group.groupData.name.split(' ')[0]
                 .user-message-preview Lorem ipsum dolor sit amet...
       .main-content

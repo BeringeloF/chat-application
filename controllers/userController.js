@@ -143,6 +143,7 @@ export const createGroup = catchAsync(async (req, res, next) => {
     image: req.file.filename,
     description: req.body.description,
     messages: [],
+    doNotShowMessagesBeforeDateToThisUsers: [],
     maybeParticipants: [...participants],
     participants: [req.user._id.toString()],
     createdBy: req.user._id.toString(),
@@ -288,10 +289,15 @@ export const createChat = catchAsync(async (req, res, next) => {
     el.rooms.push(room);
   });
 
+  const roomObj = {
+    messages: [],
+    doNotShowMessagesBeforeDateToThisUsers: [],
+  };
+
   await Promise.all([
     redis.set(req.user._id.toString(), JSON.stringify(usersObj[0])),
     redis.set(targetUser._id.toString(), JSON.stringify(usersObj[1])),
-    redis.set(room, JSON.stringify({ messages: [] })),
+    redis.set(room, JSON.stringify(roomObj)),
   ]);
 
   res.status(201).json({
@@ -362,6 +368,75 @@ export const removeInviteToGroup = catchAsync(async (req, res, next) => {
     (id) => id !== req.params.userId
   );
   redis.set(req.params.room, JSON.stringify(groupObj));
+  res.status(204).json({
+    status: "success",
+    data: null,
+  });
+});
+
+export const deleteMessagesUI = catchAsync(async (req, res, next) => {
+  const roomObj = await getRoomObj(req.params.room);
+
+  const obj = {
+    date: Date.now() - 800,
+    user: req.user._id.toString(),
+  };
+
+  //get the participants of this room which could be a normal chat room or a group room
+  const participants = req.params.room.includes("CHAT")
+    ? req.params.room.split("-").slice(1)
+    : roomObj.participants;
+
+  //checking if all the participants has exclude a message at some point, if so get the first 'exclude message' obj
+  //and realy exclude all messages that were sended before this
+
+  const ids = roomObj.doNotShowMessagesBeforeDateToThisUsers.map(
+    (obj) => obj.user
+  );
+  if (
+    roomObj.doNotShowMessagesBeforeDateToThisUsers.length > 0 &&
+    participants.every((id) => ids.includes(id))
+  ) {
+    const firstDeletedMessage =
+      roomObj.doNotShowMessagesBeforeDateToThisUsers.sort((a, b) => {
+        return a.date - b.date;
+      })[0];
+    roomObj.messages = roomObj.messages.filter(
+      (msg) => msg.sendedAt > firstDeletedMessage.date
+    );
+  }
+
+  const index = roomObj.doNotShowMessagesBeforeDateToThisUsers.findIndex(
+    (el) => el.user === req.user._id.toString()
+  );
+
+  // checking if it's this user has alredy exclude a message before, if so we gonna replace the old obj by the new one
+  if (index > -1) roomObj.doNotShowMessagesBeforeDateToThisUsers[index] = obj;
+  else roomObj.doNotShowMessagesBeforeDateToThisUsers.push(obj);
+
+  redis.set(req.params.room, JSON.stringify(roomObj));
+
+  res.status(204).json({
+    status: "success",
+    data: null,
+  });
+});
+
+export const deleteGroup = catchAsync(async (req, res, next) => {
+  const groupObj = await getRoomObj(req.params.room);
+  groupObj.participants.forEach(async (id) => {
+    try {
+      const userObj = await getUserObj(id);
+      const index = userObj.rooms.findIndex((room) => room === req.params.room);
+
+      if (index > -1) userObj.rooms.splice(index, 1);
+      redis.set(id, JSON.stringify(userObj));
+    } catch (err) {
+      throw err;
+    }
+  });
+  redis.del(req.params.room);
+
   res.status(204).json({
     status: "success",
     data: null,

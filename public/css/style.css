@@ -128,7 +128,7 @@ body {
   margin-bottom: 20px;
 }
 
-.main-content .chat-header img {
+.main-content .chat-header .foto-user {
   border-radius: 50%;
   width: 50px;
   height: 50px;
@@ -138,6 +138,7 @@ body {
 .main-content .chat-header .name {
   font-size: 18px;
   font-weight: bold;
+  margin-right: 900px;
 }
 
 .main-content .chat-box {
@@ -512,4 +513,148 @@ button {
 
 .deny-invitation:hover {
   background-color: #c82333;
+}
+
+/*DropDownMenu*/
+
+.button-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.dropdown-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  right: 0;
+  background-color: white;
+  box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.2);
+  min-width: 12rem;
+  z-index: 1;
+  border-radius: 4px;
+}
+
+.dropdown-content .dropdown-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.dropdown-content .dropdown-item:hover {
+  background-color: #f1f1f1;
+}
+
+.dropdown-separator {
+  height: 1px;
+  background-color: #e5e5e5;
+  margin: 4px 0;
+}
+
+.dropdown-trigger:focus + .dropdown-content,
+.dropdown-content:hover {
+  display: block;
+}
+
+.user-list {
+  list-style: none;
+  padding: 0;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.user-name {
+  margin-left: 10px;
+  font-weight: bold;
+}
+
+.user-message-preview {
+  margin-left: 10px;
+  color: #888;
+}
+
+.user-dropdown-content {
+  display: none;
+  position: absolute;
+  top: 45px;
+  right: 0;
+  background-color: white;
+  box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 10px;
+  min-width: 200px;
+  z-index: 9999; /* Z-index alto para ficar acima de outros elementos */
+}
+
+.user-dropdown-content .user-dropdown-item {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.user-dropdown-content .user-dropdown-item:hover {
+  background-color: #f1f1f1;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+}
+
+.user-dropdown-trigger {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+}
+
+.user-dropdown-trigger:focus + .user-dropdown-content,
+.user-dropdown-content:hover {
+  display: block;
 }

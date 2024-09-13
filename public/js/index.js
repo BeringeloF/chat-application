@@ -1,11 +1,9 @@
-import { createGroup } from "./createGroup.js";
-import { updateGroup } from "./updateGroup.js";
-import { login } from "./login.js";
-import { viewNotification } from "./markNotificationsAsVisualized.js";
+import { login } from "./api/login.js";
 import io from "socket.io-client";
-import { search } from "./search.js";
-import { acceptChatInvitation } from "./acceptChatInvitation.js";
-import { denyGroupInvitation } from "./denyGroupInvitation.js";
+import { search } from "./api/search.js";
+import notificationManager from "./appManager/notificationsManager.js";
+import groupManager from "./appManager/groupManager.js";
+import chatManager from "./appManager/chatManager.js";
 
 class App {
   #socket = io();
@@ -17,40 +15,37 @@ class App {
   #searchBar = document.querySelector(".search-bar");
   #searchResults = document.querySelector(".search-results");
   #bellIcon = document.querySelector(".bell-icon");
-  #myId;
-
   constructor() {
     if (!this.#loginForm) {
       this.#createPriviteRoomWithServer();
-      this.#getNotifications();
+      notificationManager.getNotifications();
     }
 
-    this.#socket.on("chat", this.#renderMessage.bind(this));
+    this.#socket.on("chat", this.callDisplayRecivedMessage);
     this.#socket.on("inviteToRoom", this.#acceptInvitation.bind(this));
-    this.#socket.on("chatNotification", this.#renderChatNotification);
-    this.#socket.on("serverNotification", (notification) => {
-      this.#notificationCountEl.textContent =
-        +this.#notificationCountEl.textContent + 1;
-      this.#notificationCountEl.classList.add("show");
-    });
-    this.#usersContainer?.addEventListener(
-      "click",
-      this.#renderChat.bind(this)
+    this.#socket.on("chatNotification", this.callRenderChatNotification);
+    this.#socket.on(
+      "serverNotification",
+      this.callUpdateServerNotificationsCount
     );
     this.#usersContainer?.addEventListener(
       "click",
-      this.#renderEditGroupForm.bind(this)
+      this.callDisplayChat.bind(null, this.#socket)
+    );
+    this.#usersContainer?.addEventListener(
+      "click",
+      this.callDisplayUpdateGroupForm.bind(null, this.#socket)
     );
     this.#loginForm?.addEventListener("submit", this.#sendLoginForm.bind(this));
     this.#openCreateFormBtn?.addEventListener(
       "click",
-      this.#openCreateGroupForm.bind(this)
+      this.callDisplayCreateGroupForm.bind(null, this.#socket)
     );
 
     this.#bellIcon &&
       this.#bellIcon.addEventListener(
         "click",
-        this.#renderServerNotifications.bind(this)
+        this.callRenderServerNotification
       );
     if (this.#searchBar) {
       this.#searchBar.addEventListener("keydown", this.#doSearch.bind(this));
@@ -67,137 +62,42 @@ class App {
     console.log(userId);
 
     if (!userId) return;
-    this.#myId == userId.userId;
+    notificationManager.myId = userId.userId;
+    chatManager.myId = userId.userId;
     this.#socket.emit("createRoomWithServer", userId.userId);
   }
 
-  async #getNotifications() {
-    const res = await fetch("/api/v1/users/notifications");
-    const { data } = await res.json();
-    console.log("notifications:", data);
-
-    if (data.chatNotifications.length > 0)
-      this.#renderChatNotification(data.chatNotifications);
-    if (data.serverNotifications.length > 0) {
-      this.#notificationCountEl.textContent = data.serverNotifications.length;
-      this.#notificationCountEl.classList.add("show");
-    }
+  callRenderChatNotification(notification) {
+    notificationManager.renderChatNotification(notification);
   }
 
-  async #sendMessage(e) {
-    e.preventDefault();
-    const messages = document.querySelector(".chat-box");
-    const input = document.getElementById("input");
-    const chatHeader = document.querySelector(".chat-header");
-
-    if (input.value.trim()) {
-      const room = chatHeader.getAttribute("data-room");
-      try {
-        await this.#socket.timeout(5000).emitWithAck("chat", input.value, room);
-      } catch (err) {
-        console.error("error mine", err);
-      }
-
-      const markup = `
-        <div class="message sent">
-            <div class="text">
-              ${input.value}
-            </div>
-        </div>
-      `;
-      messages.insertAdjacentHTML("beforeend", markup);
-      input.value = "";
-    }
-    console.log("enviando");
+  callRenderServerNotification(notification) {
+    notificationManager.renderServerNotifications(notification);
   }
 
-  #renderMessage(msg, callback) {
-    callback({ arrived: true, id: this.#myId });
-    const messages = document.querySelector(".chat-box");
-    let markup;
+  callUpdateServerNotificationsCount(notification) {
+    notificationManager.updateServerNotificationsCount(notification);
+  }
 
-    if (msg.isFromGroup) {
-      console.log("a messagem foi enviada de um grupo");
-      console.log(msg);
-      markup = `<div class="message received">
-         <div>${msg.sendedBy.name}</div>
-          <div class="text">
-            ${msg.content}
-          </div>
-      </div>`;
-    } else {
-      console.log("a messagem não foi enviada de um grupo");
-      console.log(msg);
-      markup = `
-      <div class="message received">
-          <div class="text">
-            ${msg.content}
-          </div>
-      </div>
-    `;
-    }
+  callDisplayCreateGroupForm(socket) {
+    groupManager.displayCreateGroupForm(socket);
+  }
 
-    messages.insertAdjacentHTML("beforeend", markup);
-    window.scrollTo(0, document.body.scrollHeight);
+  callDisplayUpdateGroupForm(socket, e) {
+    groupManager.displayUpdateGroupForm(socket, e);
+  }
+
+  callDisplayChat(socket, e) {
+    chatManager.displayChat(socket, e);
+  }
+
+  callDisplayRecivedMessage(msg, callback) {
+    chatManager.displayRecivedMessage(msg, callback);
   }
 
   async #acceptInvitation(room) {
     this.#socket.emit("join", room);
     console.log("invite to room was emited");
-  }
-
-  #renderChatNotification(notification) {
-    const list = document.querySelector(".user-list");
-    if (Array.isArray(notification)) {
-      const markup = notification.map((el) => {
-        const userItem = document.querySelector(
-          `.user-item[data-room="${el.room}"]`
-        );
-        if (userItem) list.removeChild(userItem);
-
-        return `
-     <li class="user-item" data-room="${el.room}">
-      <img class="user-avatar" src="/img/${
-        el?.isFromGroup ? "group" : "users"
-      }/${
-          el?.isFromGroup ? el.groupData.image : el.triggeredBy.photo
-        }" alt="User Avatar">
-      <p class="user-name">${
-        el?.isFromGroup
-          ? el.groupData.name.split(" ")[0]
-          : el.triggeredBy.name.split(" ")[0]
-      }</p>
-      <p class="message-count">${el.totalMessages}</p>
-      <p class="user-message-preview">${el.preview}</p>
-    </li>
-    `;
-      });
-      list.insertAdjacentHTML("afterbegin", markup);
-    } else {
-      const markup = `
-     <li class="user-item" data-room="${notification.room}">
-      <img class="user-avatar" src="/img/${
-        notification?.isFromGroup ? "group" : "users"
-      }/${
-        notification?.isFromGroup
-          ? notification.groupData.image
-          : notification.triggeredBy.photo
-      }" alt="User Avatar">
-      <p class="user-name">${
-        notification?.isFromGroup
-          ? notification.groupData.name.split(" ")[0]
-          : notification.triggeredBy.name.split(" ")[0]
-      }</p>
-      <p class="message-count">${notification.totalMessages}</p>
-      <p class="user-message-preview">${notification.preview}</p>
-    </li>
-    `;
-      const userItem = document.querySelector(
-        `.user-item[data-room="${notification.room}"]`
-      );
-      if (userItem) list.removeChild(userItem);
-      list.insertAdjacentHTML("afterbegin", markup);
-    }
   }
 
   #sendLoginForm(e) {
@@ -206,71 +106,6 @@ class App {
     const password = document.querySelector("#password").value;
     console.log(email);
     login(email, password);
-  }
-
-  async #openCreateGroupForm() {
-    this.#main.innerHTML = "";
-    const createGroupFormMarkup = `
-    <div class="div"> 
-    <div class="form-container">
-          <h2>Criar Novo Grupo</h2>
-          <form class='create-group-form' enctype="multipart/form-data">
-              <div class="form-group">
-                  <label for="group-name">Nome do Grupo:</label>
-                  <input type="text" id="group-name" name="name" placeholder="Digite o nome do grupo" required>
-              </div>
-              <div class="form-group">
-                  <label for="group-description">Descrição do Grupo:</label>
-                  <textarea id="group-description" name="description" placeholder="Digite uma descrição para o grupo" required></textarea>
-              </div>
-              <div class="form-group">
-                  <label for="group-image">Imagem do Grupo:</label>
-                  <input type="file" id="group-image" name="image" accept="image/*" required>
-              </div>
-             <input type="hidden" name="participants" id="hidden-input" value="">
-              <div class="form-group">
-                  <button type="submit">Criar Grupo</button>
-              </div>
-          </form>
-      </div>
-
-      <div class="contacts-container">
-          <h3>Contatos</h3>
-          <ul class="contact-list">
-             
-          </ul>
-      </div>
-    </div>
-    `;
-    try {
-      const res = await fetch("/api/v1/users/getContacts");
-      const { data } = await res.json();
-      console.log(data);
-      const contactsMarkup = data
-        .map((el) => {
-          return `
-       <li data-user-id="${el.id}">
-            <img class="user-avatar"src="/img/users/${el.image}">
-            <span class="contact-name">${el.name.split(" ")[0]}</span>
-            <button class="add-contact-btn">+</button>
-       </li>`;
-        })
-        .join("");
-
-      this.#main.insertAdjacentHTML("afterbegin", createGroupFormMarkup);
-      const listContainer = document.querySelector(".contact-list");
-      listContainer.innerHTML = contactsMarkup;
-      listContainer.addEventListener("click", this.#addToGroup.bind(this));
-      const createGroupForm = this.#main.querySelector(".create-group-form");
-      createGroupForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const formData = new FormData(createGroupForm);
-        createGroup(formData, this.#socket);
-        console.log("trying to create group...");
-      });
-    } catch (err) {
-      console.error("💥", err);
-    }
   }
 
   async #doSearch(e) {
@@ -310,284 +145,6 @@ class App {
     console.log(id);
 
     this.#socket.emit("sendChatInvitation", id);
-  }
-
-  async #renderServerNotifications() {
-    this.#main.innerHTML = "";
-    this.#notificationCountEl.classList.remove("show");
-    const res = await fetch("/api/v1/users/notifications");
-    const { data } = await res.json();
-    const notificationsMarkup = data.serverNotifications
-      .map((el) => {
-        if (el.context === "invite to group") {
-          console.log(el);
-          return `<div class="notification-card">
-    <div class="user-photo">
-        <img src="/img/users/${el.triggeredBy.image}" alt="User Photo">
-    </div>
-    <div class="notification-content">
-        <div class="user-info">
-            <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
-            <div class="invitation-container">
-              <p>Do you want to accept ${
-                el.triggeredBy.name.split(" ")[0]
-              }'s invitation to join the group?</p>
-              <div class="button-group">
-                  <button class="accept-invitation" data-room="${
-                    el.room
-                  }" >Accept</button>
-                  <button class="deny-invitation" data-room="${
-                    el.room
-                  }">Deny</button>
-              </div>
-        </div>
-        </div>
-
-    </div>
-</div>`;
-        } else if ((el.context = "invite to chat")) {
-          return `<div class="notification-card">
-    <div class="user-photo">
-        <img src="/img/users/${el.triggeredBy.image}" alt="User Photo">
-    </div>
-    <div class="notification-content">
-        <div class="user-info">
-            <p class="user-name">${el.triggeredBy.name.split(" ")[0]}</p>
-            <div class="invitation-container">
-              <p>Do you want to accept ${
-                el.triggeredBy.name.split(" ")[0]
-              }'s invitation to join the group?</p>
-              <div class="button-group">
-                  <button class="accept-invitation" data-user-id="${
-                    el.triggeredBy.id
-                  }" >Accept</button>
-                  <button class="deny-invitation" data-user-id="${
-                    el.triggeredBy.id
-                  }">Deny</button>
-              </div>
-        </div>
-        </div>
-
-    </div>
-</div>`;
-        }
-      })
-      .join("");
-    const markup = `<div class="notification-container">${notificationsMarkup}</div>`;
-    this.#main.innerHTML = markup;
-    const notificationContainer = document.querySelector(
-      ".notification-container"
-    );
-    notificationContainer.addEventListener(
-      "click",
-      this.#agreedToJoin.bind(this)
-    );
-    notificationContainer.addEventListener(
-      "click",
-      this.#refuseToJoin.bind(this)
-    );
-  }
-
-  #addToGroup(e) {
-    if (!e.target.classList.contains("add-contact-btn")) return;
-    const btn = e.target;
-    if (!btn.classList.contains("clicked")) {
-      btn.classList.add("clicked");
-      const id = btn.closest("li").getAttribute("data-user-id");
-      btn.textContent = "Added";
-
-      const participants = this.#main.querySelector("#hidden-input");
-      participants.value += ` ${id}`;
-    } else {
-      const participants = this.#main.querySelector("#hidden-input");
-      const participantsArray = participants.value.trim().split(" ");
-      const id = btn.closest("li").getAttribute("data-user-id");
-      const index = participantsArray.findIndex((el) => el === id);
-      participantsArray.splice(index, 1);
-      participants.value = participantsArray.join(" ");
-      btn.classList.remove("clicked");
-      btn.textContent = "+";
-    }
-  }
-
-  async #agreedToJoin(e) {
-    if (!e.target.classList.contains("accept-invitation")) return;
-    if (!e.target.dataset.userId) {
-      const room = e.target.dataset.room;
-      const resJ = await fetch(`/api/v1/users/joinToGroup/${room}`);
-      const res = await resJ.json();
-      console.log(res);
-      await viewNotification(room, true);
-    } else {
-      const id = e.target.dataset.userId;
-      const room = await acceptChatInvitation(id);
-      await viewNotification(room, true);
-    }
-    console.log("accepting invitation...");
-  }
-
-  async #refuseToJoin(e) {
-    if (!e.target.classList.contains("deny-invitation")) return;
-    if (!e.target.dataset.userId) {
-      const room = e.target.dataset.room;
-      console.log(room);
-      await denyGroupInvitation(room);
-      await viewNotification(room, true);
-      location.assign("/");
-    } else {
-      const id = e.target.dataset.userId;
-      console.log(this.#myId);
-      const room = `CHAT-${id}-${this.#myId}`;
-      await viewNotification(room, true);
-    }
-  }
-
-  async #renderChat(e) {
-    const el = e.target.closest(".user-item");
-    if (!el || e.target.classList.contains("user-avatar")) return;
-
-    const src = el.querySelector(".user-avatar").src;
-    const name = el.querySelector(".user-name").textContent;
-    const room = el.getAttribute("data-room");
-
-    this.#main.innerHTML = "";
-
-    await viewNotification(room);
-
-    //el.querySelector(`.user-message-preview`).textContent = "";
-
-    const chatHeaderMarkup = `
-      <div class="chat-header" data-room="${room}">
-        <img src="${src}" alt="User">
-        <div class="name">${name}</div>
-      </div>
-    `;
-
-    this.#main.insertAdjacentHTML("afterbegin", chatHeaderMarkup);
-
-    const res = await this.#socket.timeout(5000).emitWithAck("join", room);
-
-    if (res.status === "already joined") return;
-
-    let chatBoxMarkup = `
-      <div class="chat-box"></div>
-    `;
-    if (res.data) {
-      chatBoxMarkup = `
-      <div class="chat-box">${this.#generateTemplate(res.data, res.myId)}</div>
-      `;
-    }
-
-    this.#main.insertAdjacentHTML("beforeend", chatBoxMarkup);
-    const formMarkup = `
-    <form class="input-box">
-      <input type="text" placeholder="Type a message" id="input">
-      <button type="submit">Send</button>
-    </form>
-   `;
-
-    this.#main.insertAdjacentHTML("beforeend", formMarkup);
-    const form = this.#main.querySelector(".input-box");
-    form.addEventListener("submit", this.#sendMessage.bind(this));
-  }
-
-  #generateTemplate(messages, id) {
-    console.log(messages);
-    return messages
-      .map((msg) => {
-        if (msg.sendedBy.id === id) {
-          return `
-        <div class="message sent">
-            <div class="text">
-              ${msg.content}
-            </div>
-        </div>
-      `;
-        }
-        return `
-          <div class="message received">
-           ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ""}
-              <div class="text">
-                ${msg.content}
-              </div>
-          </div>
-        `;
-      })
-      .join(``);
-  }
-
-  async #renderEditGroupForm(e) {
-    const room = e.target.closest(".user-item").dataset.room;
-    if (!room.includes("GROUP") || !e.target.classList.contains("user-avatar"))
-      return;
-
-    const groupJson = await fetch(`/api/v1/users/group/${room}`);
-    const groupData = (await groupJson.json()).data;
-    const res = await fetch("/api/v1/users/getContacts");
-    const { data } = await res.json();
-
-    const contacts = data.filter(
-      (el) =>
-        !groupData.participants.includes(el.id) &&
-        !groupData.maybeParticipants.includes(el.id)
-    );
-
-    const contactsMarkup = contacts
-      .map((el) => {
-        return `
-       <li data-user-id="${el.id}">
-            <img class="user-avatar"src="/img/users/${el.image}">
-            <span class="contact-name">${el.name.split(" ")[0]}</span>
-            <button class="add-contact-btn">+</button>
-       </li>`;
-      })
-      .join("");
-
-    this.#main.innerHTML = "";
-
-    const editGroupFormMarkup = `
-    <div class="div"> 
-    <div class="form-container">
-          <h2>Editar Grupo </h2>
-          <form class='create-group-form' enctype="multipart/form-data">
-              <div class="form-group">
-                  <label for="group-name">Nome do Grupo:</label>
-                  <input type="text" id="group-name" name="name" value="${groupData.name}">
-              </div>
-              <div class="form-group">
-                  <label for="group-description">Descrição do Grupo:</label>
-                  <textarea id="group-description" name="description"></textarea>
-              </div>
-              <div class="form-group">
-                  <label for="group-image">Selecione uma nova imagem caso queira alterar a foto do grupo:</label>
-                  <input type="file" id="group-image" name="image" accept="image/*">
-              </div>
-             <input type="hidden" name="participants" id="hidden-input" value="">
-              <div class="form-group">
-                  <button type="submit">Salvar</button>
-              </div>
-          </form>
-      </div>
-
-      <div class="contacts-container">
-          <h3>Adcionar mais pessoas</h3>
-          <ul class="contact-list">
-             ${contactsMarkup}
-          </ul>
-      </div>
-    </div>
-    `;
-    this.#main.insertAdjacentHTML("afterbegin", editGroupFormMarkup);
-    const listContainer = document.querySelector(".contact-list");
-    listContainer.addEventListener("click", this.#addToGroup.bind(this));
-    const editGroupForm = this.#main.querySelector(".create-group-form");
-    editGroupForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const formData = new FormData(editGroupForm);
-      console.log("ROOM", room);
-      updateGroup(formData, this.#socket, room);
-      console.log("trying to edit group...");
-    });
   }
 }
 

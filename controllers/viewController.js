@@ -10,17 +10,16 @@ export const getHomePage = catchAsync(async (req, res) => {
     if (arr.includes("CHAT")) {
       arr.splice(0, 1);
       const contact = arr.find((el) => el !== req.user._id.toString());
-      return { userData: JSON.parse(await redis.get(contact)), room };
+      return { userData: await getUserObj(contact), room };
     }
   });
 
   const groupsPromises = userObj.rooms.map(async (room) => {
     if (room.includes("GROUP")) {
-      return { groupData: JSON.parse(await redis.get(room)), room };
+      return { groupData: await getRoomObj(room), room };
     }
   });
   const contacts = await Promise.all(contactsPromises);
-  console.log(contacts);
   const groups = await Promise.all(groupsPromises);
 
   res.status(200).render("chat-page", {
