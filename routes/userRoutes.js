@@ -29,7 +29,10 @@ router
   );
 //.get(authController.protect, userController.getAllGroups);
 
-router.post("/chat", authController.protect, userController.createChat);
+router
+  .route("/chat")
+  .post(authController.protect, userController.createChat)
+  .get(userController.getChat);
 router.post(
   "/denyGroupInvitation",
   authController.protect,
@@ -46,6 +49,8 @@ router
     userController.uploadGroupImage,
     userController.updateGroup
   );
+
+router.get("/getGroupParticipants/:room", userController.getGroupParticipants);
 
 router.delete(
   "/messages/:room",
@@ -76,4 +81,28 @@ router.delete(
 );
 
 router.delete("/deleteGroup/:room", userController.deleteGroup);
+
+router.patch(
+  "/selectNewGroupAdminAndLeave",
+  authController.protect,
+  userController.selectNewGroupAdminAndLeave
+);
+
+router.patch(
+  "/leaveGroup/:room",
+  authController.protect,
+  userController.leaveGroup
+);
+
+router.patch(
+  "/blockUser/:room",
+  authController.protect,
+  userController.blockUser
+);
+router.patch(
+  "/unblockUser/:room",
+  authController.protect,
+  userController.unblockUser
+);
+
 router.route("/:userId").get(userController.getUser);

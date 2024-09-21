@@ -9,12 +9,13 @@ class App {
   #socket = io();
   #usersContainer = document.querySelector(".user-list");
   #loginForm = document.getElementById("login-form");
-  #main = document.querySelector(".main-content");
   #openCreateFormBtn = document.querySelector(".create-group-icon");
-  #notificationCountEl = document.getElementById("notification-count");
   #searchBar = document.querySelector(".search-bar");
   #searchResults = document.querySelector(".search-results");
   #bellIcon = document.querySelector(".bell-icon");
+  #leaveGroup = document.querySelector(".leave-group");
+  #updateGroup = document.querySelector(".update-group");
+  #showMoreInfo = document.querySelector(".show-info");
   constructor() {
     if (!this.#loginForm) {
       this.#createPriviteRoomWithServer();
@@ -42,6 +43,16 @@ class App {
       this.callDisplayCreateGroupForm.bind(null, this.#socket)
     );
 
+    this.#usersContainer?.addEventListener(
+      "click",
+      this.callDisplayGroupInformation
+    );
+
+    this.#usersContainer?.addEventListener(
+      "click",
+      this.callDisplayLeaveGroupPopUp
+    );
+
     this.#bellIcon &&
       this.#bellIcon.addEventListener(
         "click",
@@ -64,6 +75,7 @@ class App {
     if (!userId) return;
     notificationManager.myId = userId.userId;
     chatManager.myId = userId.userId;
+    groupManager.myId = userId.userId;
     this.#socket.emit("createRoomWithServer", userId.userId);
   }
 
@@ -85,6 +97,14 @@ class App {
 
   callDisplayUpdateGroupForm(socket, e) {
     groupManager.displayUpdateGroupForm(socket, e);
+  }
+
+  callDisplayGroupInformation(e) {
+    groupManager.displayGroupInformation(e);
+  }
+
+  callDisplayLeaveGroupPopUp(e) {
+    groupManager.displayLeaveGroupPopUp(e);
   }
 
   callDisplayChat(socket, e) {

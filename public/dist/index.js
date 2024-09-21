@@ -599,12 +599,13 @@ class App {
     #socket = (0, _socketIoClientDefault.default)();
     #usersContainer = document.querySelector(".user-list");
     #loginForm = document.getElementById("login-form");
-    #main = document.querySelector(".main-content");
     #openCreateFormBtn = document.querySelector(".create-group-icon");
-    #notificationCountEl = document.getElementById("notification-count");
     #searchBar = document.querySelector(".search-bar");
     #searchResults = document.querySelector(".search-results");
     #bellIcon = document.querySelector(".bell-icon");
+    #leaveGroup = document.querySelector(".leave-group");
+    #updateGroup = document.querySelector(".update-group");
+    #showMoreInfo = document.querySelector(".show-info");
     constructor(){
         if (!this.#loginForm) {
             this.#createPriviteRoomWithServer();
@@ -618,6 +619,8 @@ class App {
         this.#usersContainer?.addEventListener("click", this.callDisplayUpdateGroupForm.bind(null, this.#socket));
         this.#loginForm?.addEventListener("submit", this.#sendLoginForm.bind(this));
         this.#openCreateFormBtn?.addEventListener("click", this.callDisplayCreateGroupForm.bind(null, this.#socket));
+        this.#usersContainer?.addEventListener("click", this.callDisplayGroupInformation);
+        this.#usersContainer?.addEventListener("click", this.callDisplayLeaveGroupPopUp);
         this.#bellIcon && this.#bellIcon.addEventListener("click", this.callRenderServerNotification);
         if (this.#searchBar) {
             this.#searchBar.addEventListener("keydown", this.#doSearch.bind(this));
@@ -631,6 +634,7 @@ class App {
         if (!userId) return;
         (0, _notificationsManagerJsDefault.default).myId = userId.userId;
         (0, _chatManagerJsDefault.default).myId = userId.userId;
+        (0, _groupManagerJsDefault.default).myId = userId.userId;
         this.#socket.emit("createRoomWithServer", userId.userId);
     }
     callRenderChatNotification(notification) {
@@ -647,6 +651,12 @@ class App {
     }
     callDisplayUpdateGroupForm(socket, e) {
         (0, _groupManagerJsDefault.default).displayUpdateGroupForm(socket, e);
+    }
+    callDisplayGroupInformation(e) {
+        (0, _groupManagerJsDefault.default).displayGroupInformation(e);
+    }
+    callDisplayLeaveGroupPopUp(e) {
+        (0, _groupManagerJsDefault.default).displayLeaveGroupPopUp(e);
     }
     callDisplayChat(socket, e) {
         (0, _chatManagerJsDefault.default).displayChat(socket, e);
@@ -9354,8 +9364,11 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _updateGroup = require("../api/updateGroup");
 var _createGroup = require("../api/createGroup");
+var _leaveGroup = require("../api/leaveGroup");
+var _getUser = require("../api/getUser");
 class Group {
     #main = document.querySelector(".main-content");
+    myId;
     async displayCreateGroupForm(socket) {
         this.#main.innerHTML = "";
         const createGroupFormMarkup = `
@@ -9438,8 +9451,9 @@ class Group {
         }
     }
     async displayUpdateGroupForm(socket, e) {
+        console.log("displayUpdateGroupFrom was called");
         const room = e.target.closest(".user-item").dataset.room;
-        if (!room.includes("GROUP") || !e.target.classList.contains("user-avatar")) return;
+        if (room.includes("CHAT") || !e.target.closest(".update-group")) return;
         const groupJson = await fetch(`/api/v1/users/group/${room}`);
         const groupData = (await groupJson.json()).data;
         const res = await fetch("/api/v1/users/getContacts");
@@ -9498,10 +9512,140 @@ class Group {
             console.log("trying to edit group...");
         });
     }
+    async displayGroupInformation(e) {
+        try {
+            const room = e.target.closest(".user-item").dataset.room;
+            if (room.includes("CHAT") || !e.target.closest(".show-info")) return;
+            console.log(e.target);
+            const groupJson = await fetch(`/api/v1/users/group/${room}?getParticipantsObj=true`);
+            const groupData = (await groupJson.json()).data;
+            const creator = groupData.participants.filter((el)=>el.id === groupData.createdBy)[0] || await (0, _getUser.getUser)(groupData.createdBy);
+            this.#main.innerHTML = "";
+            console.log(creator);
+            const participantsMarkup = groupData.participants.map((el)=>{
+                return `
+      <div class="dtz-participant">
+        <div class="dtz-avatar">
+          <img src="/img/users/${el.image}" alt="participant image">
+        </div>
+        <span>${el.name}</span>
+      </div>
+      `;
+            }).join("");
+            const markup = `
+  
+    <div class="dtz-container">
+      <div class="dtz-card">
+        <div class="dtz-card-header">
+          <img src="/img/group/${groupData.image}" alt="Project Alpha Team" class="dtz-group-image">
+          <div class="dtz-group-info">
+            <h2 class="dtz-group-name">${groupData.name}</h2>
+            <p class="dtz-group-description">${groupData.description}</p>
+          </div>
+        </div>
+        <div class="dtz-card-content">
+          <div class="dtz-group-creator">
+            <h3>Group Creator</h3>
+            <div class="dtz-avatar-info">
+              <div class="dtz-avatar">
+                <img src="/img/users/${creator.image}" alt="Jane Doe">
+              </div>
+              <span class="dtz-creator-name">${creator.name}</span>
+              <span class="dtz-badge">Creator</span>
+            </div>
+          </div>
+          <div class="dtz-participants">
+            <h3>Participants (${groupData.participants.length})</h3>
+            <div class="dtz-scroll-area">
+              ${participantsMarkup}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+            this.#main.innerHTML = markup;
+        } catch (err) {
+            console.error("ERROR MINE", err);
+        }
+    }
+    async displayLeaveGroupPopUp(e) {
+        const room = e.target.closest(".user-item").dataset.room;
+        if (room.includes("CHAT") || !e.target.closest(".leave-group")) return;
+        const body1 = document.querySelector("body");
+        const groupJson = await fetch(`/api/v1/users/group/${room}?getParticipantsObj=true`);
+        const groupData = (await groupJson.json()).data;
+        const id = room.split("-")[1];
+        let markup;
+        if (this.myId === id) {
+            const optionsMarkup = groupData.participants.filter((el)=>el.id !== id).map((el)=>{
+                return `<option value="${el.id}">${el.name}</option>`;
+            }).join("");
+            markup = `<div class="xyz-overlay" id="xyz-overlay">
+  <div class="xyz-dialog">
+    <div class="xyz-dialog-content">
+      <div class="xyz-dialog-header">
+        <h2 class="xyz-dialog-title">Leave Group</h2>
+        <p class="xyz-dialog-description">
+          Please select a new admin before leaving the group.
+        </p>
+      </div>
+      <div class="xyz-select-container">
+        <select id="xyz-new-admin" class="xyz-select">
+              ${optionsMarkup}
+        </select>
+      </div>
+      <div class="xyz-dialog-footer">
+        <button id="xyz-cancel-button" class="xyz-button xyz-button-outline">Cancel</button>
+        <button id="xyz-leave-button" class="xyz-button xyz-leave-button">Leave Group</button>
+      </div>
+    </div>
+  </div>
+</div>`;
+        } else markup = `<div id="xyz-modal" class="xyz-overlay">
+    <div class="xyz-dialog">
+      <div class="xyz-dialog-header">
+        <h2 class="xyz-dialog-title">Leave Group</h2>
+        <p class="xyz-dialog-description">Are you sure you want to leave the group?</p>
+      </div>
+      <div class="xyz-dialog-footer">
+        <button class="xyz-button-outline">Cancel</button>
+        <button class="xyz-button xyz-leave-button">Leave</button>
+      </div>
+    </div>
+  </div>`;
+        body1.insertAdjacentHTML("beforeend", markup);
+        openModal();
+        document.querySelector(".xyz-button-outline").addEventListener("click", function() {
+            closeModal();
+        });
+        document.querySelector(".xyz-leave-button").addEventListener("click", async (e)=>{
+            const select = document.querySelector("#xyz-new-admin");
+            if (select) {
+                const newAdmin = select.value;
+                if (!newAdmin) return alert("you should select a new admin before leaving!");
+                (0, _leaveGroup.selectNewGroupAdminAndLeave)({
+                    newAdmin,
+                    room
+                });
+                closeModal();
+            }
+        });
+    }
+}
+function openModal() {
+    document.getElementById("xyz-overlay").style.display = "flex"; // Show the overlay and modal
+}
+function closeModal() {
+    const overlay = document.querySelector(".xyz-overlay");
+    const dialog = document.querySelector(".xyz-dialog");
+    overlay.style.display = "none";
+    body.removeChild(dialog);
+    body.removeChild(overlay);
 }
 exports.default = new Group();
 
-},{"../api/updateGroup":"4iOAq","../api/createGroup":"cYwxp","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"4iOAq":[function(require,module,exports) {
+},{"../api/updateGroup":"4iOAq","../api/createGroup":"cYwxp","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../api/leaveGroup":"kGfn9","../api/getUser":"bJQ5L"}],"4iOAq":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "updateGroup", ()=>updateGroup);
@@ -9547,6 +9691,42 @@ const createGroup = async (data, socket)=>{
     }
 };
 
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"kGfn9":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "selectNewGroupAdminAndLeave", ()=>selectNewGroupAdminAndLeave);
+parcelHelpers.export(exports, "leaveGroup", ()=>leaveGroup);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const selectNewGroupAdminAndLeave = async (data)=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "PATCH",
+        url: "/api/v1/users/selectNewGroupAdminAndLeave",
+        data
+    });
+    console.log(res);
+};
+const leaveGroup = async ()=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "PATCH",
+        url: "/api/v1/users/leaveGroup"
+    });
+    console.log(res);
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"bJQ5L":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "getUser", ()=>getUser);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const getUser = async (id)=>{
+    return (await (0, _axiosDefault.default)({
+        url: `/api/v1/users/${id}?redisUser=true`,
+        method: "GET"
+    })).data.data.user;
+};
+
 },{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"eHfD6":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
@@ -9554,15 +9734,18 @@ var _markNotificationsAsVisualized = require("../api/markNotificationsAsVisualiz
 var _dropDownMenuMarkup = require("../dropDownMenuMarkup");
 var _dropDownMenuMarkupDefault = parcelHelpers.interopDefault(_dropDownMenuMarkup);
 var _deleteMessages = require("../api/deleteMessages");
+var _blockUser = require("../api/blockUser");
 class Chat {
     #main = document.querySelector(".main-content");
     myId;
     async displayChat(socket, e) {
         const el = e.target.closest(".user-item");
-        if (!el || e.target.classList.contains("user-avatar")) return;
+        if (!el || e.target.closest(".user-dropdown-trigger") || e.target.closest(".user-dropdown-content")) return;
+        console.log(!el, e.target.closest(".user-dropdown-trigger"), e.target.closest(".user-dropdown-content"));
         const src = el.querySelector(".user-avatar").src;
         const name = el.querySelector(".user-name").textContent;
         const room = el.getAttribute("data-room");
+        const isGroup = room.includes("GROUP");
         this.#main.innerHTML = "";
         await (0, _markNotificationsAsVisualized.viewNotification)(room);
         //el.querySelector(`.user-message-preview`).textContent = "";
@@ -9570,12 +9753,29 @@ class Chat {
           <div class="chat-header" data-room="${room}">
             <img src="${src}" alt="User" class="foto-user">
             <div class="name">${name}</div>
-            ${(0, _dropDownMenuMarkupDefault.default)}
+            ${(0, _dropDownMenuMarkupDefault.default)(isGroup)}
           </div>
         `;
         this.#main.insertAdjacentHTML("afterbegin", chatHeaderMarkup);
         this.#main.querySelector("#delete-messages").addEventListener("click", this.#deleteMessages.bind(this));
         const res = await socket.timeout(5000).emitWithAck("join", room);
+        const blockUserEl = this.#main.querySelector("#block-user");
+        if (res.chatBlockedBy) {
+            blockUserEl.id = "unblock-user";
+            blockUserEl.innerHTML = ` <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="7" height="7" x="14" y="3" rx="1"></rect>
+          <path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"></path>
+        </svg>
+        Unblock User`;
+            blockUserEl.addEventListener("click", ()=>{
+                (0, _blockUser.unblockUser)(room);
+            });
+        } else blockUserEl.addEventListener("click", ()=>{
+            (0, _blockUser.blockUser)(room);
+            setTimeout(()=>{
+                location.assign("/");
+            }, 4000);
+        });
         if (res.status === "already joined") return;
         let chatBoxMarkup = `
           <div class="chat-box"></div>
@@ -9675,10 +9875,11 @@ class Chat {
 }
 exports.default = new Chat();
 
-},{"../api/markNotificationsAsVisualized":"db23d","../dropDownMenuMarkup":"fCxFf","../api/deleteMessages":"cbFCu","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"fCxFf":[function(require,module,exports) {
+},{"../api/markNotificationsAsVisualized":"db23d","../dropDownMenuMarkup":"fCxFf","../api/deleteMessages":"cbFCu","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../api/blockUser":"16pGh"}],"fCxFf":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-const dropDownMenuMarkup = ` <div class="dropdown-menu">
+const dropDownMenuMarkup = (isGroup)=>{
+    if (isGroup) return ` <div class="dropdown-menu">
     <button class="dropdown-trigger button-icon">
       <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="8 18 12 22 16 18"></polyline>
@@ -9697,7 +9898,35 @@ const dropDownMenuMarkup = ` <div class="dropdown-menu">
         </svg>
         Delete Messages
       </div>
+      <div class="dropdown-separator"></div>
       <div class="dropdown-item">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 6 9 17l-5-5"></path>
+        </svg>
+        Report
+      </div>
+    </div>
+  </div>`;
+    else return ` <div class="dropdown-menu">
+    <button class="dropdown-trigger button-icon">
+      <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="8 18 12 22 16 18"></polyline>
+        <polyline points="8 6 12 2 16 6"></polyline>
+        <line x1="12" x2="12" y1="2" y2="22"></line>
+      </svg>
+      <span class="sr-only">More options</span>
+    </button>
+    <div class="dropdown-content">
+      <div class="dropdown-item" id="delete-messages">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 12H3"></path>
+          <path d="M16 6H3"></path>
+          <path d="M16 18H3"></path>
+          <path d="M21 12h-6"></path>
+        </svg>
+        Delete Messages
+      </div>
+      <div class="dropdown-item" id="block-user">
         <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect width="7" height="7" x="14" y="3" rx="1"></rect>
           <path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"></path>
@@ -9713,6 +9942,7 @@ const dropDownMenuMarkup = ` <div class="dropdown-menu">
       </div>
     </div>
   </div>`;
+};
 exports.default = dropDownMenuMarkup;
 
 },{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"cbFCu":[function(require,module,exports) {
@@ -9725,6 +9955,28 @@ const deleteMessages = async (room)=>{
     const res = await (0, _axiosDefault.default)({
         method: "DELETE",
         url: `/api/v1/users/deleteMessages/${room}`
+    });
+    console.log(res);
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"16pGh":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "blockUser", ()=>blockUser);
+parcelHelpers.export(exports, "unblockUser", ()=>unblockUser);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const blockUser = async (room)=>{
+    const res = await (0, _axiosDefault.default)({
+        url: `/api/v1/users/blockUser/${room}`,
+        method: "PATCH"
+    });
+    console.log(res);
+};
+const unblockUser = async (room)=>{
+    const res = await (0, _axiosDefault.default)({
+        url: `/api/v1/users/unblockUser/${room}`,
+        method: "PATCH"
     });
     console.log(res);
 };

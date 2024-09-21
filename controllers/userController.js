@@ -27,9 +27,14 @@ export const getUsers = catchAsync(async (req, res, next) => {
 });
 
 export const getUser = catchAsync(async (req, res, next) => {
-  let user = await User.findById(req.params.userId);
+  let user;
+  if (!req.query.redisUser) {
+    user = await User.findById(req.params.userId);
 
-  if (!user) return next(new AppError("user not found", 404));
+    if (!user) return next(new AppError("user not found", 404));
+  } else {
+    user = await getUserObj(req.params.userId);
+  }
 
   res.status(200).json({
     status: "success",
@@ -94,7 +99,7 @@ export const markNotificationsAsVisualized = catchAsync(
       index > -1 && userObj.serverNotifications.splice(index, 1);
     }
 
-    redis.set(req.user._id.toString(), JSON.stringify(userObj));
+    await redis.set(req.user._id.toString(), JSON.stringify(userObj));
     res.status(204).json({
       status: "success",
       data: null,
@@ -155,8 +160,8 @@ export const createGroup = catchAsync(async (req, res, next) => {
   userObj.rooms.push(room);
 
   await Promise.all([
-    redis.set(room, JSON.stringify(roomObj)),
-    redis.set(req.user._id.toString(), JSON.stringify(userObj)),
+    await redis.set(room, JSON.stringify(roomObj)),
+    await redis.set(req.user._id.toString(), JSON.stringify(userObj)),
   ]);
 
   res.status(201).json({
@@ -188,7 +193,7 @@ export const updateGroup = catchAsync(async (req, res, next) => {
   groupObj.description = req.body.description || groupObj.description;
   groupObj.maybeParticipants = participants;
 
-  redis.set(req.params.room, JSON.stringify(groupObj));
+  await redis.set(req.params.room, JSON.stringify(groupObj));
   res.status(200).json({
     status: "success",
     data: groupObj,
@@ -210,7 +215,7 @@ export const joinToGroup = catchAsync(async (req, res, next) => {
   console.log(req.params.room);
 
   let [_, roomObj] = await Promise.all([
-    redis.set(req.user._id.toString(), JSON.stringify(userObj)),
+    await redis.set(req.user._id.toString(), JSON.stringify(userObj)),
     redis.get(req.params.room),
   ]);
 
@@ -295,9 +300,9 @@ export const createChat = catchAsync(async (req, res, next) => {
   };
 
   await Promise.all([
-    redis.set(req.user._id.toString(), JSON.stringify(usersObj[0])),
-    redis.set(targetUser._id.toString(), JSON.stringify(usersObj[1])),
-    redis.set(room, JSON.stringify(roomObj)),
+    await redis.set(req.user._id.toString(), JSON.stringify(usersObj[0])),
+    await redis.set(targetUser._id.toString(), JSON.stringify(usersObj[1])),
+    await redis.set(room, JSON.stringify(roomObj)),
   ]);
 
   res.status(201).json({
@@ -310,6 +315,14 @@ export const getGroup = catchAsync(async (req, res, next) => {
   const groupJson = await redis.get(req.params.room);
   if (!groupJson) return next(new AppError("could not find this group!", 404));
   const group = JSON.parse(groupJson);
+
+  if (req.query.getParticipantsObj) {
+    const participantsPromise = group.participants.map(async (id) => {
+      return await getUserObj(id);
+    });
+    const participants = await Promise.all(participantsPromise);
+    group.participants = participants;
+  }
 
   res.status(200).json({
     status: "success",
@@ -349,7 +362,7 @@ export const denyGroupInvitation = catchAsync(async (req, res, next) => {
     (id) => id !== req.user._id.toString()
   );
 
-  redis.set(req.body.room, JSON.stringify(groupObj));
+  await redis.set(req.body.room, JSON.stringify(groupObj));
 
   res.status(200).json({
     status: "success",
@@ -367,7 +380,7 @@ export const removeInviteToGroup = catchAsync(async (req, res, next) => {
   groupObj.maybeParticipants = groupObj.maybeParticipants.filter(
     (id) => id !== req.params.userId
   );
-  redis.set(req.params.room, JSON.stringify(groupObj));
+  await redis.set(req.params.room, JSON.stringify(groupObj));
   res.status(204).json({
     status: "success",
     data: null,
@@ -414,7 +427,7 @@ export const deleteMessagesUI = catchAsync(async (req, res, next) => {
   if (index > -1) roomObj.doNotShowMessagesBeforeDateToThisUsers[index] = obj;
   else roomObj.doNotShowMessagesBeforeDateToThisUsers.push(obj);
 
-  redis.set(req.params.room, JSON.stringify(roomObj));
+  await redis.set(req.params.room, JSON.stringify(roomObj));
 
   res.status(204).json({
     status: "success",
@@ -430,7 +443,7 @@ export const deleteGroup = catchAsync(async (req, res, next) => {
       const index = userObj.rooms.findIndex((room) => room === req.params.room);
 
       if (index > -1) userObj.rooms.splice(index, 1);
-      redis.set(id, JSON.stringify(userObj));
+      await redis.set(id, JSON.stringify(userObj));
     } catch (err) {
       throw err;
     }
@@ -440,5 +453,113 @@ export const deleteGroup = catchAsync(async (req, res, next) => {
   res.status(204).json({
     status: "success",
     data: null,
+  });
+});
+
+export const getGroupParticipants = catchAsync(async (req, res, next) => {});
+
+export const selectNewGroupAdminAndLeave = catchAsync(
+  async (req, res, next) => {
+    const groupObj = await getRoomObj(req.body.room);
+    const userObj = await getUserObj(req.user._id.toString());
+
+    if (
+      req.user._id.toString() !== groupObj.createdBy &&
+      req.user._id.toString() !== groupObj.admin
+    )
+      return next(
+        new AppError("you do not have permission to perform this action!", 401)
+      );
+
+    const index = groupObj.participants.findIndex(
+      (el) => el === req.user._id.toString()
+    );
+    const indexTwo = userObj.rooms.findIndex((el) => el === req.body.room);
+
+    if (index > -1 && indexTwo > -1) {
+      groupObj.participants.splice(index, 1);
+      userObj.rooms.splice(indexTwo, 1);
+    } else {
+      return next(new AppError("you have alredy leaved this group", 400));
+    }
+
+    const newAdmin = req.body.newAdmin;
+    if (groupObj.participants.some((id) => id === newAdmin))
+      groupObj.admin = newAdmin;
+    else
+      return next(
+        new AppError(
+          "this participant that you have selected is not part of the group!",
+          400
+        )
+      );
+
+    await redis.set(req.body.room, JSON.stringify(groupObj));
+    await redis.set(req.user._id.toString(), JSON.stringify(userObj));
+
+    res.status(200).json({
+      status: "success",
+      data: groupObj,
+    });
+  }
+);
+
+export const leaveGroup = catchAsync(async (req, res, next) => {
+  const groupObj = await getRoomObj(req.params.room);
+  const userObj = await getUserObj(req.user._id.toString());
+
+  const index = groupObj.participants.findIndex(
+    (el) => el === req.user._id.toString()
+  );
+  const indexTwo = userObj.rooms.findIndex((el) => el === req.body.room);
+
+  if (index > -1 && indexTwo > -1) {
+    groupObj.participants.splice(index, 1);
+    userObj.rooms.splice(indexTwo, 1);
+  } else {
+    return next(new AppError("you have alredy leaved this group", 400));
+  }
+
+  await redis.set(req.body.room, JSON.stringify(groupObj));
+  await redis.set(req.user._id.toString(), JSON.stringify(userObj));
+
+  res.status(200).json({
+    status: "success",
+    data: groupObj,
+  });
+});
+
+export const blockUser = catchAsync(async (req, res, next) => {
+  const roomObj = await getRoomObj(req.params.room);
+  if (!roomObj.chatBlockedBy) roomObj.chatBlockedBy = [req.user._id.toString()];
+  else roomObj.chatBlockedBy.push(req.user._id.toString());
+
+  await redis.set(req.params.room.JSON.stringify(roomObj));
+
+  res.status(200).json({
+    status: "success",
+  });
+});
+
+export const getChat = catchAsync(async (req, res, next) => {
+  const chat = await getRoomObj(req.params.room);
+
+  res.status(200).json({
+    status: "success",
+    data: chat,
+  });
+});
+
+export const unblockUser = catchAsync(async (req, res, next) => {
+  const roomObj = await getRoomObj(req.params.room);
+  const index = roomObj.chatBlockedBy.findIndex(
+    (el) => el === req.user._id.toString()
+  );
+  index > -1 && roomObj.chatBlockedBy.splice(index, 1);
+
+  await redis.set(req.params.room.JSON.stringify(roomObj));
+
+  res.status(200).json({
+    status: "success",
   });
 });

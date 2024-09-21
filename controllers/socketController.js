@@ -122,8 +122,7 @@ export const joinToRoom = async (
     joinedRooms.add(room);
     console.log(`Usuário ${socket.id} inscrito na sala ${room}`);
     try {
-      const roomJson = await redis.get(room);
-      const roomObj = roomJson && JSON.parse(roomJson);
+      const roomObj = await getRoomObj(room);
       const callbackObj = { status: "joined" };
       if (userId) {
         const index = roomObj.doNotShowMessagesBeforeDateToThisUsers.findIndex(
@@ -137,6 +136,10 @@ export const joinToRoom = async (
                   roomObj.doNotShowMessagesBeforeDateToThisUsers[index].date
               )
             : roomObj.messages;
+        if (roomObj.chatBlockedBy?.length > 0) {
+          callbackObj.chatBlockedBy =
+            roomObj.chatBlockedBy[0] === userId ? "me" : "another user";
+        }
 
         callbackObj.data = messages;
         callbackObj.myId = userId;
@@ -164,6 +167,8 @@ export const onChat = (socket, io, userId) => {
           .slice(1)
           .filter((id) => id !== userId)[0];
 
+      const roomObj = await getRoomObj(room);
+      if (roomObj.chatBlockedBy.length > 0) return;
       console.log("message: " + msg);
 
       const user = await getUserObj(userId);
@@ -180,39 +185,32 @@ export const onChat = (socket, io, userId) => {
         .timeout(5000)
         .emitWithAck("chat", message);
       console.log("RESPOSTA:", res);
-      redis.get(room, async (err, reply) => {
-        if (err) {
-          console.error("Erro ao obter o valor:", err);
-        }
-        console.log(reply);
-        const roomObj = reply && JSON.parse(reply);
 
-        message.messageIndex = roomObj.messages.length;
+      message.messageIndex = roomObj.messages.length;
 
-        if (targetUserId && !res[0]?.arrived) {
-          console.log("id do alvo da notificaçao", targetUserId);
+      if (targetUserId && !res[0]?.arrived) {
+        console.log("id do alvo da notificaçao", targetUserId);
 
-          await createAndSendChatNotification(
-            userId,
-            targetUserId,
-            io,
-            room,
-            msg
-          );
-        } else if (res?.length < roomObj.participants?.length - 1) {
-          const doNotSendToThisIds = res.map((el) => el.id);
-          await createAndSendGroupNotification(
-            userId,
-            io,
-            room,
-            msg,
-            doNotSendToThisIds
-          );
-        }
+        await createAndSendChatNotification(
+          userId,
+          targetUserId,
+          io,
+          room,
+          msg
+        );
+      } else if (res?.length < roomObj.participants?.length - 1) {
+        const doNotSendToThisIds = res.map((el) => el.id);
+        await createAndSendGroupNotification(
+          userId,
+          io,
+          room,
+          msg,
+          doNotSendToThisIds
+        );
+      }
 
-        roomObj.messages.push(message);
-        redis.set(room, JSON.stringify(roomObj));
-      });
+      roomObj.messages.push(message);
+      redis.set(room, JSON.stringify(roomObj));
 
       callback({ status: "ok" });
     } catch (err) {

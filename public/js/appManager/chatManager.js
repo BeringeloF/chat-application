@@ -1,18 +1,30 @@
 import { viewNotification } from "../api/markNotificationsAsVisualized";
 import dropDownMenuMarkup from "../dropDownMenuMarkup";
 import { deleteMessages } from "../api/deleteMessages";
+import { blockUser, unblockUser } from "../api/blockUser";
 
 class Chat {
   #main = document.querySelector(".main-content");
   myId;
   async displayChat(socket, e) {
     const el = e.target.closest(".user-item");
-    if (!el || e.target.classList.contains("user-avatar")) return;
+    if (
+      !el ||
+      e.target.closest(".user-dropdown-trigger") ||
+      e.target.closest(".user-dropdown-content")
+    )
+      return;
+
+    console.log(
+      !el,
+      e.target.closest(".user-dropdown-trigger"),
+      e.target.closest(".user-dropdown-content")
+    );
 
     const src = el.querySelector(".user-avatar").src;
     const name = el.querySelector(".user-name").textContent;
     const room = el.getAttribute("data-room");
-
+    const isGroup = room.includes("GROUP");
     this.#main.innerHTML = "";
 
     await viewNotification(room);
@@ -23,7 +35,7 @@ class Chat {
           <div class="chat-header" data-room="${room}">
             <img src="${src}" alt="User" class="foto-user">
             <div class="name">${name}</div>
-            ${dropDownMenuMarkup}
+            ${dropDownMenuMarkup(isGroup)}
           </div>
         `;
 
@@ -33,6 +45,27 @@ class Chat {
       .addEventListener("click", this.#deleteMessages.bind(this));
 
     const res = await socket.timeout(5000).emitWithAck("join", room);
+
+    const blockUserEl = this.#main.querySelector("#block-user");
+
+    if (res.chatBlockedBy) {
+      blockUserEl.id = "unblock-user";
+      blockUserEl.innerHTML = ` <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="7" height="7" x="14" y="3" rx="1"></rect>
+          <path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"></path>
+        </svg>
+        Unblock User`;
+      blockUserEl.addEventListener("click", () => {
+        unblockUser(room);
+      });
+    } else {
+      blockUserEl.addEventListener("click", () => {
+        blockUser(room);
+        setTimeout(() => {
+          location.assign("/");
+        }, 4000);
+      });
+    }
 
     if (res.status === "already joined") return;
 
