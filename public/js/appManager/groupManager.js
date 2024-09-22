@@ -1,6 +1,6 @@
 import { updateGroup } from "../api/updateGroup";
 import { createGroup } from "../api/createGroup";
-import { selectNewGroupAdminAndLeave } from "../api/leaveGroup";
+import { leaveGroup, selectNewGroupAdminAndLeave } from "../api/leaveGroup";
 import { getUser } from "../api/getUser";
 
 class Group {
@@ -94,10 +94,10 @@ class Group {
   }
 
   async displayUpdateGroupForm(socket, e) {
-    console.log("displayUpdateGroupFrom was called");
     const room = e.target.closest(".user-item").dataset.room;
 
     if (room.includes("CHAT") || !e.target.closest(".update-group")) return;
+    console.log("displayUpdateGroupFrom was called");
 
     const groupJson = await fetch(`/api/v1/users/group/${room}`);
     const groupData = (await groupJson.json()).data;
@@ -246,7 +246,7 @@ class Group {
     const groupData = (await groupJson.json()).data;
     const id = room.split("-")[1];
     let markup;
-    if (this.myId === id) {
+    if (this.myId === id && groupData.participants.length > 1) {
       const optionsMarkup = groupData.participants
         .filter((el) => el.id !== id)
         .map((el) => {
@@ -308,20 +308,22 @@ class Group {
           selectNewGroupAdminAndLeave({ newAdmin, room });
           closeModal();
         } else {
+          leaveGroup(room);
+          closeModal();
         }
       });
   }
 }
 
 function openModal() {
-  document.getElementById("xyz-overlay").style.display = "flex"; // Show the overlay and modal
+  document.querySelector(".xyz-overlay").style.display = "flex"; // Show the overlay and modal
 }
 
 function closeModal() {
   const overlay = document.querySelector(".xyz-overlay");
   const dialog = document.querySelector(".xyz-dialog");
   overlay.style.display = "none";
-  body.removeChild(dialog);
+  const body = document.querySelector("body");
   body.removeChild(overlay);
 }
 

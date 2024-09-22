@@ -7,3 +7,5 @@ export const router = express.Router();
 router.get("/", authController.protect, viewController.getHomePage);
 
 router.get("/login", viewController.getLoginForm);
+
+router.get("/singup", viewController.getSingUpForm);

@@ -599,6 +599,7 @@ class App {
     #socket = (0, _socketIoClientDefault.default)();
     #usersContainer = document.querySelector(".user-list");
     #loginForm = document.getElementById("login-form");
+    #singupForm = document.getElementById("signup-form");
     #openCreateFormBtn = document.querySelector(".create-group-icon");
     #searchBar = document.querySelector(".search-bar");
     #searchResults = document.querySelector(".search-results");
@@ -618,6 +619,7 @@ class App {
         this.#usersContainer?.addEventListener("click", this.callDisplayChat.bind(null, this.#socket));
         this.#usersContainer?.addEventListener("click", this.callDisplayUpdateGroupForm.bind(null, this.#socket));
         this.#loginForm?.addEventListener("submit", this.#sendLoginForm.bind(this));
+        this.#singupForm?.addEventListener("submit", this.#sendSingUpForm.bind(this));
         this.#openCreateFormBtn?.addEventListener("click", this.callDisplayCreateGroupForm.bind(null, this.#socket));
         this.#usersContainer?.addEventListener("click", this.callDisplayGroupInformation);
         this.#usersContainer?.addEventListener("click", this.callDisplayLeaveGroupPopUp);
@@ -674,6 +676,19 @@ class App {
         const password = document.querySelector("#password").value;
         console.log(email);
         (0, _loginJs.login)(email, password);
+    }
+    #sendSingUpForm(e) {
+        e.preventDefault();
+        const name = document.getElementById("name").value;
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const confirmPassword = document.getElementById("confirm-password").value;
+        if (!email || !password || !name || !confirmPassword) {
+            showError("Please fill in all fields");
+            return;
+        }
+        console.log(name, email, password, confirmPassword);
+        (0, _loginJs.singup)(name, email, password, confirmPassword);
     }
     async #doSearch(e) {
         if (e.key !== "Enter") return;
@@ -5795,6 +5810,7 @@ function Backoff(opts) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "login", ()=>login);
+parcelHelpers.export(exports, "singup", ()=>singup);
 parcelHelpers.export(exports, "logout", ()=>logout);
 var _axios = require("axios");
 var _axiosDefault = parcelHelpers.interopDefault(_axios);
@@ -5817,6 +5833,22 @@ const login = async (email, password)=>{
     } catch (err) {
         console.error(err.response.data.message);
     }
+};
+const singup = async (name, email, password, passwordConfirm)=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "POST",
+        url: "/api/v1/users/singup",
+        data: {
+            name,
+            email,
+            password,
+            passwordConfirm
+        }
+    });
+    console.log(res);
+    if (res.data.status === "success") setTimeout(()=>{
+        location.assign("/");
+    }, 4000);
 };
 const logout = async ()=>{
     try {
@@ -9451,9 +9483,9 @@ class Group {
         }
     }
     async displayUpdateGroupForm(socket, e) {
-        console.log("displayUpdateGroupFrom was called");
         const room = e.target.closest(".user-item").dataset.room;
         if (room.includes("CHAT") || !e.target.closest(".update-group")) return;
+        console.log("displayUpdateGroupFrom was called");
         const groupJson = await fetch(`/api/v1/users/group/${room}`);
         const groupData = (await groupJson.json()).data;
         const res = await fetch("/api/v1/users/getContacts");
@@ -9572,12 +9604,12 @@ class Group {
     async displayLeaveGroupPopUp(e) {
         const room = e.target.closest(".user-item").dataset.room;
         if (room.includes("CHAT") || !e.target.closest(".leave-group")) return;
-        const body1 = document.querySelector("body");
+        const body = document.querySelector("body");
         const groupJson = await fetch(`/api/v1/users/group/${room}?getParticipantsObj=true`);
         const groupData = (await groupJson.json()).data;
         const id = room.split("-")[1];
         let markup;
-        if (this.myId === id) {
+        if (this.myId === id && groupData.participants.length > 1) {
             const optionsMarkup = groupData.participants.filter((el)=>el.id !== id).map((el)=>{
                 return `<option value="${el.id}">${el.name}</option>`;
             }).join("");
@@ -9614,7 +9646,7 @@ class Group {
       </div>
     </div>
   </div>`;
-        body1.insertAdjacentHTML("beforeend", markup);
+        body.insertAdjacentHTML("beforeend", markup);
         openModal();
         document.querySelector(".xyz-button-outline").addEventListener("click", function() {
             closeModal();
@@ -9629,18 +9661,21 @@ class Group {
                     room
                 });
                 closeModal();
+            } else {
+                (0, _leaveGroup.leaveGroup)(room);
+                closeModal();
             }
         });
     }
 }
 function openModal() {
-    document.getElementById("xyz-overlay").style.display = "flex"; // Show the overlay and modal
+    document.querySelector(".xyz-overlay").style.display = "flex"; // Show the overlay and modal
 }
 function closeModal() {
     const overlay = document.querySelector(".xyz-overlay");
     const dialog = document.querySelector(".xyz-dialog");
     overlay.style.display = "none";
-    body.removeChild(dialog);
+    const body = document.querySelector("body");
     body.removeChild(overlay);
 }
 exports.default = new Group();
@@ -9706,10 +9741,10 @@ const selectNewGroupAdminAndLeave = async (data)=>{
     });
     console.log(res);
 };
-const leaveGroup = async ()=>{
+const leaveGroup = async (room)=>{
     const res = await (0, _axiosDefault.default)({
         method: "PATCH",
-        url: "/api/v1/users/leaveGroup"
+        url: `/api/v1/users/leaveGroup/${room}`
     });
     console.log(res);
 };
@@ -9760,7 +9795,7 @@ class Chat {
         this.#main.querySelector("#delete-messages").addEventListener("click", this.#deleteMessages.bind(this));
         const res = await socket.timeout(5000).emitWithAck("join", room);
         const blockUserEl = this.#main.querySelector("#block-user");
-        if (res.chatBlockedBy) {
+        if (res.chatBlockedBy === "me") {
             blockUserEl.id = "unblock-user";
             blockUserEl.innerHTML = ` <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect width="7" height="7" x="14" y="3" rx="1"></rect>
@@ -9770,7 +9805,7 @@ class Chat {
             blockUserEl.addEventListener("click", ()=>{
                 (0, _blockUser.unblockUser)(room);
             });
-        } else blockUserEl.addEventListener("click", ()=>{
+        } else blockUserEl?.addEventListener("click", ()=>{
             (0, _blockUser.blockUser)(room);
             setTimeout(()=>{
                 location.assign("/");
@@ -9781,7 +9816,7 @@ class Chat {
           <div class="chat-box"></div>
         `;
         if (res.data) chatBoxMarkup = `
-          <div class="chat-box">${this.#generatePreviousMessagesMarkup(res.data, res.myId)}</div>
+          <div class="chat-box">${this.#generatePreviousMessagesMarkup(res.data, res.myId, res.chatBlockedBy)}</div>
           `;
         this.#main.insertAdjacentHTML("beforeend", chatBoxMarkup);
         const formMarkup = `
@@ -9848,25 +9883,38 @@ class Chat {
         messages.insertAdjacentHTML("beforeend", markup);
         window.scrollTo(0, document.body.scrollHeight);
     }
-    #generatePreviousMessagesMarkup(messages, id) {
+    #generatePreviousMessagesMarkup(messages, id, blockedBy) {
         console.log(messages);
-        return messages.map((msg)=>{
+        let alertMarkup;
+        if (blockedBy) alertMarkup = blockedBy === "me" ? `
+  <div class="alert-message">
+    <span class="icon">\u{26A0}\u{FE0F}</span>
+    <p>Voc\xea bloqueou este usu\xe1rio. N\xe3o ser\xe1 poss\xedvel receber ou enviar mensagens deste usu\xe1rio at\xe9 que o desbloqueie!</p>
+  </div>
+    ` : `
+  <div class="alert-message">
+    <span class="icon">\u{26A0}\u{FE0F}</span>
+    <p>Voc\xea foi bloqueado por este usu\xe1rio. N\xe3o ser\xe1 poss\xedvel receber ou enviar mensagens deste usu\xe1rio at\xe9 que ele o desbloqueie!</p>
+  </div>`;
+        const markup = messages.map((msg)=>{
             if (msg.sendedBy.id === id) return `
-        <div class="message sent">
-            <div class="text">
-              ${msg.content}
-            </div>
+    <div class="message sent">
+        <div class="text">
+          ${msg.content}
         </div>
-      `;
+    </div>
+  `;
             return `
-          <div class="message received">
-           ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ""}
-              <div class="text">
-                ${msg.content}
-              </div>
+      <div class="message received">
+       ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ""}
+          <div class="text">
+            ${msg.content}
           </div>
-        `;
-        }).join(``);
+      </div>
+    `;
+        });
+        alertMarkup && markup.push(alertMarkup);
+        return markup.join(``);
     }
     async #deleteMessages() {
         const room = document.querySelector(".chat-header").dataset.room;

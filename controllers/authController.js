@@ -65,6 +65,21 @@ export const singup = catchAsync(async (req, res, next) => {
     passwordConfirm: req.body.passwordConfirm,
   });
 
+  const resp = await redis.get(newUser._id.toString());
+
+  if (!resp) {
+    const userObj = {
+      name: newUser.name,
+      image: newUser.photo,
+      id: newUser._id.toString(),
+      rooms: [],
+      chatNotifications: [],
+      serverNotifications: [],
+    };
+
+    await redis.set(newUser._id, JSON.stringify(userObj));
+  }
+
   createSendToken(newUser, 201, res);
 });
 
@@ -93,7 +108,7 @@ export const login = catchAsync(async (req, res, next) => {
       serverNotifications: [],
     };
 
-    redis.set(user._id, JSON.stringify(userObj));
+    await redis.set(user._id, JSON.stringify(userObj));
   }
   // if everything is correct send access token
   createSendToken(user, 200, res);

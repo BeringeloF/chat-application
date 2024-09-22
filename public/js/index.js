@@ -1,4 +1,4 @@
-import { login } from "./api/login.js";
+import { login, singup } from "./api/login.js";
 import io from "socket.io-client";
 import { search } from "./api/search.js";
 import notificationManager from "./appManager/notificationsManager.js";
@@ -9,6 +9,7 @@ class App {
   #socket = io();
   #usersContainer = document.querySelector(".user-list");
   #loginForm = document.getElementById("login-form");
+  #singupForm = document.getElementById("signup-form");
   #openCreateFormBtn = document.querySelector(".create-group-icon");
   #searchBar = document.querySelector(".search-bar");
   #searchResults = document.querySelector(".search-results");
@@ -38,6 +39,11 @@ class App {
       this.callDisplayUpdateGroupForm.bind(null, this.#socket)
     );
     this.#loginForm?.addEventListener("submit", this.#sendLoginForm.bind(this));
+    this.#singupForm?.addEventListener(
+      "submit",
+      this.#sendSingUpForm.bind(this)
+    );
+
     this.#openCreateFormBtn?.addEventListener(
       "click",
       this.callDisplayCreateGroupForm.bind(null, this.#socket)
@@ -126,6 +132,24 @@ class App {
     const password = document.querySelector("#password").value;
     console.log(email);
     login(email, password);
+  }
+
+  #sendSingUpForm(e) {
+    e.preventDefault();
+
+    const name = document.getElementById("name").value;
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const confirmPassword = document.getElementById("confirm-password").value;
+
+    if (!email || !password || !name || !confirmPassword) {
+      showError("Please fill in all fields");
+      return;
+    }
+
+    console.log(name, email, password, confirmPassword);
+
+    singup(name, email, password, confirmPassword);
   }
 
   async #doSearch(e) {

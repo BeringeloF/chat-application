@@ -511,7 +511,7 @@ export const leaveGroup = catchAsync(async (req, res, next) => {
   const index = groupObj.participants.findIndex(
     (el) => el === req.user._id.toString()
   );
-  const indexTwo = userObj.rooms.findIndex((el) => el === req.body.room);
+  const indexTwo = userObj.rooms.findIndex((el) => el === req.params.room);
 
   if (index > -1 && indexTwo > -1) {
     groupObj.participants.splice(index, 1);
@@ -534,7 +534,7 @@ export const blockUser = catchAsync(async (req, res, next) => {
   if (!roomObj.chatBlockedBy) roomObj.chatBlockedBy = [req.user._id.toString()];
   else roomObj.chatBlockedBy.push(req.user._id.toString());
 
-  await redis.set(req.params.room.JSON.stringify(roomObj));
+  await redis.set(req.params.room, JSON.stringify(roomObj));
 
   res.status(200).json({
     status: "success",
@@ -557,7 +557,7 @@ export const unblockUser = catchAsync(async (req, res, next) => {
   );
   index > -1 && roomObj.chatBlockedBy.splice(index, 1);
 
-  await redis.set(req.params.room.JSON.stringify(roomObj));
+  await redis.set(req.params.room, JSON.stringify(roomObj));
 
   res.status(200).json({
     status: "success",

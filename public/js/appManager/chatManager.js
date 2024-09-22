@@ -48,7 +48,7 @@ class Chat {
 
     const blockUserEl = this.#main.querySelector("#block-user");
 
-    if (res.chatBlockedBy) {
+    if (res.chatBlockedBy === "me") {
       blockUserEl.id = "unblock-user";
       blockUserEl.innerHTML = ` <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect width="7" height="7" x="14" y="3" rx="1"></rect>
@@ -59,7 +59,7 @@ class Chat {
         unblockUser(room);
       });
     } else {
-      blockUserEl.addEventListener("click", () => {
+      blockUserEl?.addEventListener("click", () => {
         blockUser(room);
         setTimeout(() => {
           location.assign("/");
@@ -76,7 +76,8 @@ class Chat {
       chatBoxMarkup = `
           <div class="chat-box">${this.#generatePreviousMessagesMarkup(
             res.data,
-            res.myId
+            res.myId,
+            res.chatBlockedBy
           )}</div>
           `;
     }
@@ -151,29 +152,49 @@ class Chat {
     window.scrollTo(0, document.body.scrollHeight);
   }
 
-  #generatePreviousMessagesMarkup(messages, id) {
+  #generatePreviousMessagesMarkup(messages, id, blockedBy) {
     console.log(messages);
-    return messages
-      .map((msg) => {
-        if (msg.sendedBy.id === id) {
-          return `
-        <div class="message sent">
-            <div class="text">
-              ${msg.content}
-            </div>
-        </div>
-      `;
-        }
+    let alertMarkup;
+
+    if (blockedBy) {
+      alertMarkup =
+        blockedBy === "me"
+          ? `
+  <div class="alert-message">
+    <span class="icon">⚠️</span>
+    <p>Você bloqueou este usuário. Não será possível receber ou enviar mensagens deste usuário até que o desbloqueie!</p>
+  </div>
+    `
+          : `
+  <div class="alert-message">
+    <span class="icon">⚠️</span>
+    <p>Você foi bloqueado por este usuário. Não será possível receber ou enviar mensagens deste usuário até que ele o desbloqueie!</p>
+  </div>`;
+    }
+
+    const markup = messages.map((msg) => {
+      if (msg.sendedBy.id === id) {
         return `
-          <div class="message received">
-           ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ""}
-              <div class="text">
-                ${msg.content}
-              </div>
+    <div class="message sent">
+        <div class="text">
+          ${msg.content}
+        </div>
+    </div>
+  `;
+      }
+      return `
+      <div class="message received">
+       ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ""}
+          <div class="text">
+            ${msg.content}
           </div>
-        `;
-      })
-      .join(``);
+      </div>
+    `;
+    });
+
+    alertMarkup && markup.push(alertMarkup);
+
+    return markup.join(``);
   }
 
   async #deleteMessages() {

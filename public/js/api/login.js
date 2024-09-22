@@ -23,6 +23,25 @@ export const login = async (email, password) => {
   }
 };
 
+export const singup = async (name, email, password, passwordConfirm) => {
+  const res = await axios({
+    method: "POST",
+    url: "/api/v1/users/singup",
+    data: {
+      name,
+      email,
+      password,
+      passwordConfirm,
+    },
+  });
+
+  console.log(res);
+  if (res.data.status === "success")
+    setTimeout(() => {
+      location.assign("/");
+    }, 4000);
+};
+
 export const logout = async () => {
   try {
     const res = await axios({

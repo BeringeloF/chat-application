@@ -136,9 +136,14 @@ export const joinToRoom = async (
                   roomObj.doNotShowMessagesBeforeDateToThisUsers[index].date
               )
             : roomObj.messages;
+        console.log(roomObj.chatBlockedBy?.length > 0);
         if (roomObj.chatBlockedBy?.length > 0) {
           callbackObj.chatBlockedBy =
-            roomObj.chatBlockedBy[0] === userId ? "me" : "another user";
+            roomObj.chatBlockedBy[0] === userId ||
+            roomObj.chatBlockedBy[1] === userId
+              ? "me"
+              : "another user";
+          console.log("this user was blocked by you or blocked you himself");
         }
 
         callbackObj.data = messages;
@@ -168,7 +173,8 @@ export const onChat = (socket, io, userId) => {
           .filter((id) => id !== userId)[0];
 
       const roomObj = await getRoomObj(room);
-      if (roomObj.chatBlockedBy.length > 0) return;
+      if (roomObj.chatBlockedBy?.length > 0)
+        return callback({ status: "failed" });
       console.log("message: " + msg);
 
       const user = await getUserObj(userId);

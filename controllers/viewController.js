@@ -31,3 +31,7 @@ export const getHomePage = catchAsync(async (req, res) => {
 export const getLoginForm = (req, res) => {
   res.status(200).render("login");
 };
+
+export const getSingUpForm = (req, res) => {
+  res.status(200).render("singup.pug");
+};
