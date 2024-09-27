@@ -1,7 +1,10 @@
-import { updateGroup } from "../api/updateGroup";
-import { createGroup } from "../api/createGroup";
-import { leaveGroup, selectNewGroupAdminAndLeave } from "../api/leaveGroup";
-import { getUser } from "../api/getUser";
+import { updateGroup } from "../apiCalls/updateGroup.js";
+import { createGroup } from "../apiCalls/createGroup.js";
+import {
+  leaveGroup,
+  selectNewGroupAdminAndLeave,
+} from "../apiCalls/leaveGroup.js";
+import { getUser } from "../apiCalls/getUser.js";
 
 class Group {
   #main = document.querySelector(".main-content");

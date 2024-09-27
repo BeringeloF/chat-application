@@ -4,9 +4,9 @@
 4 implementar grupos//feito
 5 implementar funcionalidade de editar informaçoes sobre grupos, adicionar mais pessoas ao grupo, mudar foto de perfil e nome
 do usuario//feito
-6 implementar funcionalidade de excluir menssagems tanto do chat normal quanto do grupo
-7 implementar login com o google
-8 implementar refresh token
+6 implementar funcionalidade de excluir menssagems tanto do chat normal quanto do grupo//feito
+7 implementar login com o google//feito
+
 
 (opcional) implementar funcionalidade de envio de imagems, audio, video e outros arquivos
 (opcional) melhorar o UI

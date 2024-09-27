@@ -1,6 +1,7 @@
 import User from "../db/userModel.js";
 import Redis from "ioredis";
 import { getUserObj, getRoomObj } from "../helpers/getObjFromRedis.js";
+import xssFilters from "xss-filters";
 
 export const redis = new Redis();
 redis.on("error", (err) => {
@@ -164,6 +165,7 @@ export const joinToRoom = async (
 //function to be executed on the chat emiter
 export const onChat = (socket, io, userId) => {
   return async (msg, room, callback) => {
+    msg = xssFilters.inHTMLData(msg);
     try {
       let targetUserId;
       if (room.includes("CHAT"))

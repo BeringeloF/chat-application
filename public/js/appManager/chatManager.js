@@ -1,7 +1,8 @@
-import { viewNotification } from "../api/markNotificationsAsVisualized";
+import { viewNotification } from "../apiCalls/markNotificationsAsVisualized";
 import dropDownMenuMarkup from "../dropDownMenuMarkup";
-import { deleteMessages } from "../api/deleteMessages";
-import { blockUser, unblockUser } from "../api/blockUser";
+import { deleteMessages } from "../apiCalls/deleteMessages";
+import { blockUser, unblockUser } from "../apiCalls/blockUser";
+import xssFilters from "xss-filters";
 
 class Chat {
   #main = document.querySelector(".main-content");
@@ -100,11 +101,11 @@ class Chat {
     const messages = document.querySelector(".chat-box");
     const input = document.getElementById("input");
     const chatHeader = document.querySelector(".chat-header");
-
-    if (input.value.trim()) {
+    const message = xssFilters.inHTMLData(input.value);
+    if (message.trim()) {
       const room = chatHeader.getAttribute("data-room");
       try {
-        await socket.timeout(5000).emitWithAck("chat", input.value, room);
+        await socket.timeout(5000).emitWithAck("chat", message, room);
       } catch (err) {
         console.error("error mine", err);
       }
@@ -112,7 +113,7 @@ class Chat {
       const markup = `
         <div class="message sent">
             <div class="text">
-              ${input.value}
+              ${message}
             </div>
         </div>
       `;

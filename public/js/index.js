@@ -1,9 +1,11 @@
-import { login, singup } from "./api/login.js";
+import { login, singup } from "./apiCalls/login.js";
 import io from "socket.io-client";
-import { search } from "./api/search.js";
+import { search } from "./apiCalls/search.js";
 import notificationManager from "./appManager/notificationsManager.js";
 import groupManager from "./appManager/groupManager.js";
 import chatManager from "./appManager/chatManager.js";
+import { updateUserProfileImage } from "./apiCalls/updateUserProfileImage.js";
+import { singInWithGoogle } from "./apiCalls/singInWithGoogle.js";
 
 class App {
   #socket = io();
@@ -14,11 +16,11 @@ class App {
   #searchBar = document.querySelector(".search-bar");
   #searchResults = document.querySelector(".search-results");
   #bellIcon = document.querySelector(".bell-icon");
-  #leaveGroup = document.querySelector(".leave-group");
-  #updateGroup = document.querySelector(".update-group");
-  #showMoreInfo = document.querySelector(".show-info");
+  #myPhoto = document.querySelector(".my-photo");
+  #main = document.querySelector(".main-content");
+  #singInBtn = document.getElementById("google-signup");
   constructor() {
-    if (!this.#loginForm) {
+    if (!this.#loginForm && !this.#singupForm) {
       this.#createPriviteRoomWithServer();
       notificationManager.getNotifications();
     }
@@ -71,10 +73,15 @@ class App {
         this.#tryToAddUser.bind(this)
       );
     }
+
+    this.#myPhoto?.addEventListener(
+      "click",
+      this.#displayUpdateProfileImageForm.bind(this)
+    );
   }
 
   async #createPriviteRoomWithServer() {
-    const res = await fetch("/api/v1/users/getMe");
+    const res = await fetch("/api/v1/users/getMe?onlyId=true");
     const userId = await res.json();
     console.log(userId);
 
@@ -179,6 +186,83 @@ class App {
       .join("");
 
     this.#searchResults.innerHTML = markup;
+  }
+
+  async #displayUpdateProfileImageForm(e) {
+    const meJson = await fetch("/api/v1/users/getMe");
+    const me = (await meJson.json()).user;
+
+    const markup = `
+    <div class="cyz-body">
+    <div class="cyz-container">
+  <div class="cyz-card">
+      <div class="cyz-card-header">
+          <h1 class="cyz-card-title">User Profile</h1>
+      </div>
+      <div class="cyz-card-content">
+          <div class="cyz-profile-info">
+              <div class="cyz-avatar">
+                  <img id="avatar-image" src="/img/users/${me.photo}" alt="User Avatar">
+                  <div id="avatar-fallback" class="cyz-avatar-fallback"></div>
+              </div>
+              <div class="cyz-user-details">
+                  <h2 id="user-name">${me.name}</h2>
+                  <p id="user-email">${me.email}</p>
+              </div>
+          </div>
+          <form id="photo-form" class="cyz-photo-form">
+              <div class="cyz-form-group">
+                  <label for="photo">Change Profile Photo</label>
+                  <input id="photo" type="file" accept="image/*" class="cyz-hidden">
+                  <button type="button" id="select-photo-btn" class="cyz-btn">Select New Photo</button>
+              </div>
+              <button type="submit" id="update-photo-btn" class="cyz-btn cyz-hidden">Update Photo</button>
+          </form>
+      </div>
+  </div>
+</div>
+</div>`;
+    this.#main.innerHTML = "";
+    this.#main.insertAdjacentHTML("afterbegin", markup);
+    const avatarImage = document.getElementById("avatar-image");
+    const photoInput = document.getElementById("photo");
+    const selectPhotoBtn = document.getElementById("select-photo-btn");
+    const updatePhotoBtn = document.getElementById("update-photo-btn");
+    const photoForm = document.getElementById("photo-form");
+    selectPhotoBtn.addEventListener("click", () => photoInput.click());
+    photoInput.addEventListener(
+      "change",
+      this.#handlePhotoChange.bind(null, avatarImage, updatePhotoBtn)
+    );
+    photoForm.addEventListener(
+      "submit",
+      this.#updateProfileImage.bind(null, updatePhotoBtn)
+    );
+  }
+
+  #updateProfileImage(updatePhotoBtn, e) {
+    e.preventDefault();
+
+    const formData = new FormData();
+    const imageInput = document.getElementById("photo");
+    if (imageInput.files.length > 0) {
+      formData.append("photo", imageInput.files[0]);
+    }
+
+    updateUserProfileImage(formData);
+    updatePhotoBtn.classList.add("cyz-hidden");
+  }
+
+  #handlePhotoChange(avatarImage, updatePhotoBtn, e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        avatarImage.src = reader.result;
+        updatePhotoBtn.classList.remove("cyz-hidden");
+      };
+      reader.readAsDataURL(file);
+    }
   }
 
   async #tryToAddUser(e) {

@@ -1,6 +1,6 @@
-import { viewNotification } from "../api/markNotificationsAsVisualized";
-import { denyGroupInvitation } from "../api/denyGroupInvitation";
-import { acceptChatInvitation } from "../api/acceptChatInvitation";
+import { viewNotification } from "../apiCalls/markNotificationsAsVisualized.js";
+import { denyGroupInvitation } from "../apiCalls/denyGroupInvitation.js";
+import { acceptChatInvitation } from "../apiCalls/acceptChatInvitation.js";
 
 class Notification {
   #main = document.querySelector(".main-content");
@@ -29,15 +29,60 @@ class Notification {
   }
 
   #generateChatNMarkup(notification) {
-    return `
-         <li class="user-item" data-room="${notification.room}">
-          <img class="user-avatar" src="/img/${
-            notification?.isFromGroup ? "group" : "users"
-          }/${
+    const dropdown = `<button class="user-dropdown-trigger">
+ <img class="user-avatar" src="/img/${
+   notification?.isFromGroup ? "group" : "users"
+ }/${
       notification?.isFromGroup
         ? notification.groupData.image
         : notification.triggeredBy.photo
     }" alt="User Avatar">
+</button>
+
+<div class="user-dropdown-content">
+  <div class="user-dropdown-item leave-group">
+    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 16l4-4-4-4M21 12H9"></path>
+    </svg>
+    <span>Leave the group</span>
+  </div>
+
+  ${
+    this.myId === notification.groupData?.createdBy
+      ? `<div class="user-dropdown-item update-group">
+    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"></path>
+      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+    </svg>
+    <span>Update group</span>
+  </div>`
+      : ""
+  }
+
+  <div class="user-dropdown-item show-info">
+    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="M12 16v-4"></path>
+      <path d="M12 8h.01"></path>
+    </svg>
+    <span>Show more info</span>
+  </div>
+</div>`;
+    return `
+         <li class="user-item" data-room="${notification.room}">
+         
+         ${
+           notification?.isFromGroup
+             ? dropdown
+             : ` <img class="user-avatar" src="/img/${
+                 notification?.isFromGroup ? "group" : "users"
+               }/${
+                 notification?.isFromGroup
+                   ? notification.groupData.image
+                   : notification.triggeredBy.photo
+               }" alt="User Avatar">`
+         }
+
           <p class="user-name">${
             notification?.isFromGroup
               ? notification.groupData.name.split(" ")[0]

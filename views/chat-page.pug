@@ -22,7 +22,7 @@ html(lang="en")
       aside.sidebar
         .user-profile
           .user-main
-            img.user-avatar(src=`/img/users/${user.photo}`)
+            img.user-avatar.my-photo(src=`/img/users/${user.photo}`)
             .user-name= user.name.split(' ')[0]
             img.create-group-icon(src="/img/icons/create-group-icon.png")
             .notification-icon

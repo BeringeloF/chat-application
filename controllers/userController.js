@@ -5,6 +5,8 @@ import { redis } from "./socketController.js";
 import multer from "multer";
 import { getUserObj, getRoomObj } from "../helpers/getObjFromRedis.js";
 import path from "node:path";
+import sharp from "sharp";
+import xssFilters from "xss-filters";
 
 export const getUsers = catchAsync(async (req, res, next) => {
   let filter = {};
@@ -45,9 +47,16 @@ export const getUser = catchAsync(async (req, res, next) => {
 });
 
 export const getMe = catchAsync(async (req, res, next) => {
+  if (req.query.onlyId) {
+    return res.status(200).json({
+      status: "success",
+      userId: req.user._id.toString(),
+    });
+  }
+  const user = await User.findById(req.user._id.toString());
   res.status(200).json({
     status: "success",
-    userId: req.user._id.toString(),
+    user,
   });
 });
 
@@ -128,10 +137,26 @@ const storage = multer.diskStorage({
   },
 });
 
+const storageTwo = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "./public/img/users/"); // Pasta onde os arquivos serão salvos
+  },
+  filename: (req, file, cb) => {
+    cb(null, `user-image-${Date.now()}-${path.extname(file.originalname)}`);
+  },
+});
+
 const upload = multer({
   storage: storage,
   fileFilter: multerFilter,
 });
+
+const uploadTwo = multer({
+  storage: storageTwo,
+  fileFilter: multerFilter,
+});
+
+export const uploadUserImage = uploadTwo.single("photo");
 
 export const uploadGroupImage = upload.single("image");
 
@@ -190,7 +215,9 @@ export const updateGroup = catchAsync(async (req, res, next) => {
   if (req.file) groupObj.image = req.file.filename;
 
   groupObj.name = req.body.name || groupObj.name;
+  groupObj.name = xssFilters.inHTMLData(groupObj.name);
   groupObj.description = req.body.description || groupObj.description;
+  groupObj.description = xssFilters.inHTMLData(groupObj.description);
   groupObj.maybeParticipants = participants;
 
   await redis.set(req.params.room, JSON.stringify(groupObj));
@@ -561,5 +588,27 @@ export const unblockUser = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: "success",
+  });
+});
+
+export const updateUserProfileImage = catchAsync(async (req, res, next) => {
+  const [user, redisUser] = await Promise.all([
+    User.findById(req.user._id),
+    getUserObj(req.user._id.toString()),
+  ]);
+
+  user.photo = req.file.filename;
+  redisUser.image = req.file.filename;
+  await Promise.all([
+    user.save({ validateBeforeSave: false }),
+    redis.set(req.user._id.toString(), JSON.stringify(redisUser)),
+  ]);
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      user,
+      redisUser,
+    },
   });
 });

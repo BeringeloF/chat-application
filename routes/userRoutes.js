@@ -1,6 +1,7 @@
 import express from "express";
 import * as userController from "../controllers/userController.js";
 import * as authController from "../controllers/authController.js";
+import passport from "../controllers/passport-setup.js";
 
 export const router = express.Router();
 
@@ -19,6 +20,25 @@ router.get(
   "/joinToGroup/:room",
   authController.protect,
   userController.joinToGroup
+);
+
+router.get(
+  "/auth/sing-in-with-google",
+  passport.authenticate("google", { scope: ["profile", "email"] })
+);
+
+// Callback do Google
+router.get(
+  "/oauth/google",
+  passport.authenticate("google", { session: false }),
+  authController.loginWithGoogle
+);
+
+router.patch(
+  "/updateUserProfileImage",
+  authController.protect,
+  userController.uploadUserImage,
+  userController.updateUserProfileImage
 );
 
 router

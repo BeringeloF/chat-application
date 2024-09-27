@@ -585,16 +585,18 @@ function hmrAccept(bundle /*: ParcelRequire */ , id /*: string */ ) {
 
 },{}],"f2QDv":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-var _loginJs = require("./api/login.js");
+var _loginJs = require("./apiCalls/login.js");
 var _socketIoClient = require("socket.io-client");
 var _socketIoClientDefault = parcelHelpers.interopDefault(_socketIoClient);
-var _searchJs = require("./api/search.js");
+var _searchJs = require("./apiCalls/search.js");
 var _notificationsManagerJs = require("./appManager/notificationsManager.js");
 var _notificationsManagerJsDefault = parcelHelpers.interopDefault(_notificationsManagerJs);
 var _groupManagerJs = require("./appManager/groupManager.js");
 var _groupManagerJsDefault = parcelHelpers.interopDefault(_groupManagerJs);
 var _chatManagerJs = require("./appManager/chatManager.js");
 var _chatManagerJsDefault = parcelHelpers.interopDefault(_chatManagerJs);
+var _updateUserProfileImageJs = require("./apiCalls/updateUserProfileImage.js");
+var _singInWithGoogleJs = require("./apiCalls/singInWithGoogle.js");
 class App {
     #socket = (0, _socketIoClientDefault.default)();
     #usersContainer = document.querySelector(".user-list");
@@ -604,11 +606,11 @@ class App {
     #searchBar = document.querySelector(".search-bar");
     #searchResults = document.querySelector(".search-results");
     #bellIcon = document.querySelector(".bell-icon");
-    #leaveGroup = document.querySelector(".leave-group");
-    #updateGroup = document.querySelector(".update-group");
-    #showMoreInfo = document.querySelector(".show-info");
+    #myPhoto = document.querySelector(".my-photo");
+    #main = document.querySelector(".main-content");
+    #singInBtn = document.getElementById("google-signup");
     constructor(){
-        if (!this.#loginForm) {
+        if (!this.#loginForm && !this.#singupForm) {
             this.#createPriviteRoomWithServer();
             (0, _notificationsManagerJsDefault.default).getNotifications();
         }
@@ -628,9 +630,10 @@ class App {
             this.#searchBar.addEventListener("keydown", this.#doSearch.bind(this));
             this.#searchResults.addEventListener("click", this.#tryToAddUser.bind(this));
         }
+        this.#myPhoto?.addEventListener("click", this.#displayUpdateProfileImageForm.bind(this));
     }
     async #createPriviteRoomWithServer() {
-        const res = await fetch("/api/v1/users/getMe");
+        const res = await fetch("/api/v1/users/getMe?onlyId=true");
         const userId = await res.json();
         console.log(userId);
         if (!userId) return;
@@ -710,6 +713,69 @@ class App {
         }).join("");
         this.#searchResults.innerHTML = markup;
     }
+    async #displayUpdateProfileImageForm(e) {
+        const meJson = await fetch("/api/v1/users/getMe");
+        const me = (await meJson.json()).user;
+        const markup = `
+    <div class="cyz-body">
+    <div class="cyz-container">
+  <div class="cyz-card">
+      <div class="cyz-card-header">
+          <h1 class="cyz-card-title">User Profile</h1>
+      </div>
+      <div class="cyz-card-content">
+          <div class="cyz-profile-info">
+              <div class="cyz-avatar">
+                  <img id="avatar-image" src="/img/users/${me.photo}" alt="User Avatar">
+                  <div id="avatar-fallback" class="cyz-avatar-fallback"></div>
+              </div>
+              <div class="cyz-user-details">
+                  <h2 id="user-name">${me.name}</h2>
+                  <p id="user-email">${me.email}</p>
+              </div>
+          </div>
+          <form id="photo-form" class="cyz-photo-form">
+              <div class="cyz-form-group">
+                  <label for="photo">Change Profile Photo</label>
+                  <input id="photo" type="file" accept="image/*" class="cyz-hidden">
+                  <button type="button" id="select-photo-btn" class="cyz-btn">Select New Photo</button>
+              </div>
+              <button type="submit" id="update-photo-btn" class="cyz-btn cyz-hidden">Update Photo</button>
+          </form>
+      </div>
+  </div>
+</div>
+</div>`;
+        this.#main.innerHTML = "";
+        this.#main.insertAdjacentHTML("afterbegin", markup);
+        const avatarImage = document.getElementById("avatar-image");
+        const photoInput = document.getElementById("photo");
+        const selectPhotoBtn = document.getElementById("select-photo-btn");
+        const updatePhotoBtn = document.getElementById("update-photo-btn");
+        const photoForm = document.getElementById("photo-form");
+        selectPhotoBtn.addEventListener("click", ()=>photoInput.click());
+        photoInput.addEventListener("change", this.#handlePhotoChange.bind(null, avatarImage, updatePhotoBtn));
+        photoForm.addEventListener("submit", this.#updateProfileImage.bind(null, updatePhotoBtn));
+    }
+    #updateProfileImage(updatePhotoBtn, e) {
+        e.preventDefault();
+        const formData = new FormData();
+        const imageInput = document.getElementById("photo");
+        if (imageInput.files.length > 0) formData.append("photo", imageInput.files[0]);
+        (0, _updateUserProfileImageJs.updateUserProfileImage)(formData);
+        updatePhotoBtn.classList.add("cyz-hidden");
+    }
+    #handlePhotoChange(avatarImage, updatePhotoBtn, e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = ()=>{
+                avatarImage.src = reader.result;
+                updatePhotoBtn.classList.remove("cyz-hidden");
+            };
+            reader.readAsDataURL(file);
+        }
+    }
     async #tryToAddUser(e) {
         if (!e.target.classList.contains("add-contact-btn-2")) return;
         const el = e.target.closest(".user-item");
@@ -721,7 +787,7 @@ class App {
 }
 const app = new App();
 
-},{"socket.io-client":"8HBJR","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./api/login.js":"gn5T3","./api/search.js":"94zK7","./appManager/notificationsManager.js":"alfAB","./appManager/groupManager.js":"gexjz","./appManager/chatManager.js":"eHfD6"}],"8HBJR":[function(require,module,exports) {
+},{"socket.io-client":"8HBJR","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./appManager/notificationsManager.js":"alfAB","./appManager/groupManager.js":"gexjz","./appManager/chatManager.js":"eHfD6","./apiCalls/updateUserProfileImage.js":"creMx","./apiCalls/login.js":"7OYCV","./apiCalls/search.js":"aaVXD","./apiCalls/singInWithGoogle.js":"anm2V"}],"8HBJR":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 /**
@@ -5806,59 +5872,186 @@ function Backoff(opts) {
     this.jitter = jitter;
 };
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"gn5T3":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"alfAB":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "login", ()=>login);
-parcelHelpers.export(exports, "singup", ()=>singup);
-parcelHelpers.export(exports, "logout", ()=>logout);
+var _markNotificationsAsVisualizedJs = require("../apiCalls/markNotificationsAsVisualized.js");
+var _denyGroupInvitationJs = require("../apiCalls/denyGroupInvitation.js");
+var _acceptChatInvitationJs = require("../apiCalls/acceptChatInvitation.js");
+class Notification {
+    #main = document.querySelector(".main-content");
+    #notificationCountEl = document.getElementById("notification-count");
+    myId;
+    renderChatNotification(notification) {
+        const list = document.querySelector(".user-list");
+        if (Array.isArray(notification)) {
+            const markup = notification.map((el)=>{
+                const userItem = document.querySelector(`.user-item[data-room="${el.room}"]`);
+                if (userItem) list.removeChild(userItem);
+                return this.#generateChatNMarkup(el);
+            });
+            list.insertAdjacentHTML("afterbegin", markup);
+        } else {
+            const markup = this.#generateChatNMarkup(notification);
+            const userItem = document.querySelector(`.user-item[data-room="${notification.room}"]`);
+            if (userItem) list.removeChild(userItem);
+            list.insertAdjacentHTML("afterbegin", markup);
+        }
+    }
+    #generateChatNMarkup(notification) {
+        const dropdown = `<button class="user-dropdown-trigger">
+ <img class="user-avatar" src="/img/${notification?.isFromGroup ? "group" : "users"}/${notification?.isFromGroup ? notification.groupData.image : notification.triggeredBy.photo}" alt="User Avatar">
+</button>
+
+<div class="user-dropdown-content">
+  <div class="user-dropdown-item leave-group">
+    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 16l4-4-4-4M21 12H9"></path>
+    </svg>
+    <span>Leave the group</span>
+  </div>
+
+  ${this.myId === notification.groupData?.createdBy ? `<div class="user-dropdown-item update-group">
+    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"></path>
+      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+    </svg>
+    <span>Update group</span>
+  </div>` : ""}
+
+  <div class="user-dropdown-item show-info">
+    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="M12 16v-4"></path>
+      <path d="M12 8h.01"></path>
+    </svg>
+    <span>Show more info</span>
+  </div>
+</div>`;
+        return `
+         <li class="user-item" data-room="${notification.room}">
+         
+         ${notification?.isFromGroup ? dropdown : ` <img class="user-avatar" src="/img/${notification?.isFromGroup ? "group" : "users"}/${notification?.isFromGroup ? notification.groupData.image : notification.triggeredBy.photo}" alt="User Avatar">`}
+
+          <p class="user-name">${notification?.isFromGroup ? notification.groupData.name.split(" ")[0] : notification.triggeredBy.name.split(" ")[0]}</p>
+          <p class="message-count">${notification.totalMessages}</p>
+          <p class="user-message-preview">${notification.preview}</p>
+        </li>
+        `;
+    }
+    async renderServerNotifications() {
+        this.#main.innerHTML = "";
+        this.#notificationCountEl.classList.remove("show");
+        const res = await fetch("/api/v1/users/notifications");
+        const { data } = await res.json();
+        const notificationsMarkup = data.serverNotifications.map((el)=>this.#generateServerNMarkup(el, el.context)).join("");
+        const markup = `<div class="notification-container">${notificationsMarkup}</div>`;
+        this.#main.innerHTML = markup;
+        const notificationContainer = document.querySelector(".notification-container");
+        notificationContainer.addEventListener("click", this.#agreedToJoin.bind(this));
+        notificationContainer.addEventListener("click", this.#refuseToJoin.bind(this));
+    }
+    #generateServerNMarkup(notification, context) {
+        if (context === "invite to group") return `<div class="notification-card">
+    <div class="user-photo">
+        <img src="/img/users/${notification.triggeredBy.image}" alt="User Photo">
+    </div>
+    <div class="notification-content">
+        <div class="user-info">
+            <p class="user-name">${notification.triggeredBy.name.split(" ")[0]}</p>
+            <div class="invitation-container">
+              <p>Do you want to accept ${notification.triggeredBy.name.split(" ")[0]}'s invitation to join the group?</p>
+              <div class="button-group">
+                  <button class="accept-invitation" data-room="${notification.room}" >Accept</button>
+                  <button class="deny-invitation" data-room="${notification.room}">Deny</button>
+              </div>
+        </div>
+        </div>
+
+    </div>
+</div>`;
+        if (context === "invite to chat") return `<div class="notification-card">
+    <div class="user-photo">
+        <img src="/img/users/${notification.triggeredBy.image}" alt="User Photo">
+    </div>
+    <div class="notification-content">
+        <div class="user-info">
+            <p class="user-name">${notification.triggeredBy.name.split(" ")[0]}</p>
+            <div class="invitation-container">
+              <p>Do you want to accept ${notification.triggeredBy.name.split(" ")[0]}'s invitation to join the group?</p>
+              <div class="button-group">
+                  <button class="accept-invitation" data-user-id="${notification.triggeredBy.id}" >Accept</button>
+                  <button class="deny-invitation" data-user-id="${notification.triggeredBy.id}">Deny</button>
+              </div>
+        </div>
+        </div>
+
+    </div>
+</div>`;
+    }
+    async #agreedToJoin(e) {
+        if (!e.target.classList.contains("accept-invitation")) return;
+        if (!e.target.dataset.userId) {
+            const room = e.target.dataset.room;
+            const resJ = await fetch(`/api/v1/users/joinToGroup/${room}`);
+            const res = await resJ.json();
+            console.log(res);
+            await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+        } else {
+            const id = e.target.dataset.userId;
+            const room = await (0, _acceptChatInvitationJs.acceptChatInvitation)(id);
+            await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+        }
+        console.log("accepting invitation...");
+    }
+    async #refuseToJoin(e) {
+        if (!e.target.classList.contains("deny-invitation")) return;
+        if (!e.target.dataset.userId) {
+            const room = e.target.dataset.room;
+            console.log(room);
+            await (0, _denyGroupInvitationJs.denyGroupInvitation)(room);
+            await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+            location.assign("/");
+        } else {
+            const id = e.target.dataset.userId;
+            console.log(this.myId);
+            const room = `CHAT-${id}-${this.myId}`;
+            await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
+        }
+    }
+    updateServerNotificationsCount(notification) {
+        this.#notificationCountEl.textContent = +this.#notificationCountEl.textContent + 1;
+        this.#notificationCountEl.classList.add("show");
+    }
+    async getNotifications() {
+        const res = await fetch("/api/v1/users/notifications");
+        const { data } = await res.json();
+        console.log("notifications:", data);
+        if (data.chatNotifications.length > 0) this.renderChatNotification(data.chatNotifications);
+        if (data.serverNotifications.length > 0) {
+            this.#notificationCountEl.textContent = data.serverNotifications.length;
+            this.#notificationCountEl.classList.add("show");
+        }
+    }
+}
+const notificationManager = new Notification();
+exports.default = notificationManager;
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../apiCalls/markNotificationsAsVisualized.js":"4SFvT","../apiCalls/denyGroupInvitation.js":"j5bv6","../apiCalls/acceptChatInvitation.js":"lq9yY"}],"4SFvT":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "viewNotification", ()=>viewNotification);
 var _axios = require("axios");
 var _axiosDefault = parcelHelpers.interopDefault(_axios);
-const login = async (email, password)=>{
-    console.log(email);
-    console.log(password);
+const viewNotification = async (room, boolean)=>{
     try {
         const res = await (0, _axiosDefault.default)({
-            method: "POST",
-            url: "/api/v1/users/login",
-            data: {
-                email,
-                password
-            }
+            method: "DELETE",
+            url: `/api/v1/users/notifications/${room}${boolean ? "?serverNotification=" + boolean : ""}`
         });
-        console.log(res);
-        if (res.data.status === "success") window.setTimeout(()=>{
-            location.assign("/");
-        }, 1500);
+        console.log("notifications from the room " + room + " was marked as visualized!");
     } catch (err) {
-        console.error(err.response.data.message);
-    }
-};
-const singup = async (name, email, password, passwordConfirm)=>{
-    const res = await (0, _axiosDefault.default)({
-        method: "POST",
-        url: "/api/v1/users/singup",
-        data: {
-            name,
-            email,
-            password,
-            passwordConfirm
-        }
-    });
-    console.log(res);
-    if (res.data.status === "success") setTimeout(()=>{
-        location.assign("/");
-    }, 4000);
-};
-const logout = async ()=>{
-    try {
-        const res = await (0, _axiosDefault.default)({
-            method: "GET",
-            url: "/api/v1/users/logout"
-        });
-        if (res.data.status === "success") location.reload(true);
-    } catch (err) {
-        console.log(err);
+        console.error(err);
     }
 };
 
@@ -9180,179 +9373,7 @@ Object.entries(HttpStatusCode).forEach(([key, value])=>{
 });
 exports.default = HttpStatusCode;
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"94zK7":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "search", ()=>search);
-var _axios = require("axios");
-var _axiosDefault = parcelHelpers.interopDefault(_axios);
-const search = async (data)=>{
-    try {
-        const res1 = await (0, _axiosDefault.default)({
-            method: "GET",
-            url: "/api/v1/users/search?search=" + data
-        });
-        console.log(res1);
-        return res1.data.data.users;
-    } catch (err) {
-        console.error("error mine", err);
-    }
-    return res;
-};
-
-},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"alfAB":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-var _markNotificationsAsVisualized = require("../api/markNotificationsAsVisualized");
-var _denyGroupInvitation = require("../api/denyGroupInvitation");
-var _acceptChatInvitation = require("../api/acceptChatInvitation");
-class Notification {
-    #main = document.querySelector(".main-content");
-    #notificationCountEl = document.getElementById("notification-count");
-    myId;
-    renderChatNotification(notification) {
-        const list = document.querySelector(".user-list");
-        if (Array.isArray(notification)) {
-            const markup = notification.map((el)=>{
-                const userItem = document.querySelector(`.user-item[data-room="${el.room}"]`);
-                if (userItem) list.removeChild(userItem);
-                return this.#generateChatNMarkup(el);
-            });
-            list.insertAdjacentHTML("afterbegin", markup);
-        } else {
-            const markup = this.#generateChatNMarkup(notification);
-            const userItem = document.querySelector(`.user-item[data-room="${notification.room}"]`);
-            if (userItem) list.removeChild(userItem);
-            list.insertAdjacentHTML("afterbegin", markup);
-        }
-    }
-    #generateChatNMarkup(notification) {
-        return `
-         <li class="user-item" data-room="${notification.room}">
-          <img class="user-avatar" src="/img/${notification?.isFromGroup ? "group" : "users"}/${notification?.isFromGroup ? notification.groupData.image : notification.triggeredBy.photo}" alt="User Avatar">
-          <p class="user-name">${notification?.isFromGroup ? notification.groupData.name.split(" ")[0] : notification.triggeredBy.name.split(" ")[0]}</p>
-          <p class="message-count">${notification.totalMessages}</p>
-          <p class="user-message-preview">${notification.preview}</p>
-        </li>
-        `;
-    }
-    async renderServerNotifications() {
-        this.#main.innerHTML = "";
-        this.#notificationCountEl.classList.remove("show");
-        const res = await fetch("/api/v1/users/notifications");
-        const { data } = await res.json();
-        const notificationsMarkup = data.serverNotifications.map((el)=>this.#generateServerNMarkup(el, el.context)).join("");
-        const markup = `<div class="notification-container">${notificationsMarkup}</div>`;
-        this.#main.innerHTML = markup;
-        const notificationContainer = document.querySelector(".notification-container");
-        notificationContainer.addEventListener("click", this.#agreedToJoin.bind(this));
-        notificationContainer.addEventListener("click", this.#refuseToJoin.bind(this));
-    }
-    #generateServerNMarkup(notification, context) {
-        if (context === "invite to group") return `<div class="notification-card">
-    <div class="user-photo">
-        <img src="/img/users/${notification.triggeredBy.image}" alt="User Photo">
-    </div>
-    <div class="notification-content">
-        <div class="user-info">
-            <p class="user-name">${notification.triggeredBy.name.split(" ")[0]}</p>
-            <div class="invitation-container">
-              <p>Do you want to accept ${notification.triggeredBy.name.split(" ")[0]}'s invitation to join the group?</p>
-              <div class="button-group">
-                  <button class="accept-invitation" data-room="${notification.room}" >Accept</button>
-                  <button class="deny-invitation" data-room="${notification.room}">Deny</button>
-              </div>
-        </div>
-        </div>
-
-    </div>
-</div>`;
-        if (context === "invite to chat") return `<div class="notification-card">
-    <div class="user-photo">
-        <img src="/img/users/${notification.triggeredBy.image}" alt="User Photo">
-    </div>
-    <div class="notification-content">
-        <div class="user-info">
-            <p class="user-name">${notification.triggeredBy.name.split(" ")[0]}</p>
-            <div class="invitation-container">
-              <p>Do you want to accept ${notification.triggeredBy.name.split(" ")[0]}'s invitation to join the group?</p>
-              <div class="button-group">
-                  <button class="accept-invitation" data-user-id="${notification.triggeredBy.id}" >Accept</button>
-                  <button class="deny-invitation" data-user-id="${notification.triggeredBy.id}">Deny</button>
-              </div>
-        </div>
-        </div>
-
-    </div>
-</div>`;
-    }
-    async #agreedToJoin(e) {
-        if (!e.target.classList.contains("accept-invitation")) return;
-        if (!e.target.dataset.userId) {
-            const room = e.target.dataset.room;
-            const resJ = await fetch(`/api/v1/users/joinToGroup/${room}`);
-            const res = await resJ.json();
-            console.log(res);
-            await (0, _markNotificationsAsVisualized.viewNotification)(room, true);
-        } else {
-            const id = e.target.dataset.userId;
-            const room = await (0, _acceptChatInvitation.acceptChatInvitation)(id);
-            await (0, _markNotificationsAsVisualized.viewNotification)(room, true);
-        }
-        console.log("accepting invitation...");
-    }
-    async #refuseToJoin(e) {
-        if (!e.target.classList.contains("deny-invitation")) return;
-        if (!e.target.dataset.userId) {
-            const room = e.target.dataset.room;
-            console.log(room);
-            await (0, _denyGroupInvitation.denyGroupInvitation)(room);
-            await (0, _markNotificationsAsVisualized.viewNotification)(room, true);
-            location.assign("/");
-        } else {
-            const id = e.target.dataset.userId;
-            console.log(this.myId);
-            const room = `CHAT-${id}-${this.myId}`;
-            await (0, _markNotificationsAsVisualized.viewNotification)(room, true);
-        }
-    }
-    updateServerNotificationsCount(notification) {
-        this.#notificationCountEl.textContent = +this.#notificationCountEl.textContent + 1;
-        this.#notificationCountEl.classList.add("show");
-    }
-    async getNotifications() {
-        const res = await fetch("/api/v1/users/notifications");
-        const { data } = await res.json();
-        console.log("notifications:", data);
-        if (data.chatNotifications.length > 0) this.renderChatNotification(data.chatNotifications);
-        if (data.serverNotifications.length > 0) {
-            this.#notificationCountEl.textContent = data.serverNotifications.length;
-            this.#notificationCountEl.classList.add("show");
-        }
-    }
-}
-const notificationManager = new Notification();
-exports.default = notificationManager;
-
-},{"../api/markNotificationsAsVisualized":"db23d","../api/denyGroupInvitation":"d2i8j","../api/acceptChatInvitation":"l2IZT","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"db23d":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "viewNotification", ()=>viewNotification);
-var _axios = require("axios");
-var _axiosDefault = parcelHelpers.interopDefault(_axios);
-const viewNotification = async (room, boolean)=>{
-    try {
-        const res = await (0, _axiosDefault.default)({
-            method: "DELETE",
-            url: `/api/v1/users/notifications/${room}${boolean ? "?serverNotification=" + boolean : ""}`
-        });
-        console.log("notifications from the room " + room + " was marked as visualized!");
-    } catch (err) {
-        console.error(err);
-    }
-};
-
-},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"d2i8j":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"j5bv6":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "denyGroupInvitation", ()=>denyGroupInvitation);
@@ -9369,7 +9390,7 @@ const denyGroupInvitation = async (room)=>{
     console.log("deny invitation", res);
 };
 
-},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"l2IZT":[function(require,module,exports) {
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"lq9yY":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "acceptChatInvitation", ()=>acceptChatInvitation);
@@ -9394,10 +9415,10 @@ const acceptChatInvitation = async (id)=>{
 },{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"gexjz":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-var _updateGroup = require("../api/updateGroup");
-var _createGroup = require("../api/createGroup");
-var _leaveGroup = require("../api/leaveGroup");
-var _getUser = require("../api/getUser");
+var _updateGroupJs = require("../apiCalls/updateGroup.js");
+var _createGroupJs = require("../apiCalls/createGroup.js");
+var _leaveGroupJs = require("../apiCalls/leaveGroup.js");
+var _getUserJs = require("../apiCalls/getUser.js");
 class Group {
     #main = document.querySelector(".main-content");
     myId;
@@ -9455,7 +9476,7 @@ class Group {
             createGroupForm.addEventListener("submit", async (e)=>{
                 e.preventDefault();
                 const formData = new FormData(createGroupForm);
-                (0, _createGroup.createGroup)(formData, socket);
+                (0, _createGroupJs.createGroup)(formData, socket);
                 console.log("trying to create group...");
             });
         } catch (err) {
@@ -9540,7 +9561,7 @@ class Group {
             e.preventDefault();
             const formData = new FormData(editGroupForm);
             console.log("ROOM", room);
-            (0, _updateGroup.updateGroup)(formData, socket, room);
+            (0, _updateGroupJs.updateGroup)(formData, socket, room);
             console.log("trying to edit group...");
         });
     }
@@ -9551,7 +9572,7 @@ class Group {
             console.log(e.target);
             const groupJson = await fetch(`/api/v1/users/group/${room}?getParticipantsObj=true`);
             const groupData = (await groupJson.json()).data;
-            const creator = groupData.participants.filter((el)=>el.id === groupData.createdBy)[0] || await (0, _getUser.getUser)(groupData.createdBy);
+            const creator = groupData.participants.filter((el)=>el.id === groupData.createdBy)[0] || await (0, _getUserJs.getUser)(groupData.createdBy);
             this.#main.innerHTML = "";
             console.log(creator);
             const participantsMarkup = groupData.participants.map((el)=>{
@@ -9656,13 +9677,13 @@ class Group {
             if (select) {
                 const newAdmin = select.value;
                 if (!newAdmin) return alert("you should select a new admin before leaving!");
-                (0, _leaveGroup.selectNewGroupAdminAndLeave)({
+                (0, _leaveGroupJs.selectNewGroupAdminAndLeave)({
                     newAdmin,
                     room
                 });
                 closeModal();
             } else {
-                (0, _leaveGroup.leaveGroup)(room);
+                (0, _leaveGroupJs.leaveGroup)(room);
                 closeModal();
             }
         });
@@ -9680,7 +9701,7 @@ function closeModal() {
 }
 exports.default = new Group();
 
-},{"../api/updateGroup":"4iOAq","../api/createGroup":"cYwxp","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../api/leaveGroup":"kGfn9","../api/getUser":"bJQ5L"}],"4iOAq":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../apiCalls/updateGroup.js":"1R5vk","../apiCalls/createGroup.js":"7MeN7","../apiCalls/leaveGroup.js":"fO2vw","../apiCalls/getUser.js":"3L0P2"}],"1R5vk":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "updateGroup", ()=>updateGroup);
@@ -9705,7 +9726,7 @@ const updateGroup = async (data, socket, room)=>{
     }
 };
 
-},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"cYwxp":[function(require,module,exports) {
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"7MeN7":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "createGroup", ()=>createGroup);
@@ -9723,10 +9744,11 @@ const createGroup = async (data, socket)=>{
         console.log("ROOM:", res.data.room);
         const { maybeParticipants } = res.data.data;
         socket.emit("issueInvitations", maybeParticipants, res.data.room);
+        location.assign("/");
     }
 };
 
-},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"kGfn9":[function(require,module,exports) {
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"fO2vw":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "selectNewGroupAdminAndLeave", ()=>selectNewGroupAdminAndLeave);
@@ -9749,7 +9771,7 @@ const leaveGroup = async (room)=>{
     console.log(res);
 };
 
-},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"bJQ5L":[function(require,module,exports) {
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"3L0P2":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "getUser", ()=>getUser);
@@ -9765,11 +9787,13 @@ const getUser = async (id)=>{
 },{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"eHfD6":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-var _markNotificationsAsVisualized = require("../api/markNotificationsAsVisualized");
+var _markNotificationsAsVisualized = require("../apiCalls/markNotificationsAsVisualized");
 var _dropDownMenuMarkup = require("../dropDownMenuMarkup");
 var _dropDownMenuMarkupDefault = parcelHelpers.interopDefault(_dropDownMenuMarkup);
-var _deleteMessages = require("../api/deleteMessages");
-var _blockUser = require("../api/blockUser");
+var _deleteMessages = require("../apiCalls/deleteMessages");
+var _blockUser = require("../apiCalls/blockUser");
+var _xssFilters = require("xss-filters");
+var _xssFiltersDefault = parcelHelpers.interopDefault(_xssFilters);
 class Chat {
     #main = document.querySelector(".main-content");
     myId;
@@ -9834,17 +9858,18 @@ class Chat {
         const messages = document.querySelector(".chat-box");
         const input = document.getElementById("input");
         const chatHeader = document.querySelector(".chat-header");
-        if (input.value.trim()) {
+        const message = (0, _xssFiltersDefault.default).inHTMLData(input.value);
+        if (message.trim()) {
             const room = chatHeader.getAttribute("data-room");
             try {
-                await socket.timeout(5000).emitWithAck("chat", input.value, room);
+                await socket.timeout(5000).emitWithAck("chat", message, room);
             } catch (err) {
                 console.error("error mine", err);
             }
             const markup = `
         <div class="message sent">
             <div class="text">
-              ${input.value}
+              ${message}
             </div>
         </div>
       `;
@@ -9923,7 +9948,7 @@ class Chat {
 }
 exports.default = new Chat();
 
-},{"../api/markNotificationsAsVisualized":"db23d","../dropDownMenuMarkup":"fCxFf","../api/deleteMessages":"cbFCu","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../api/blockUser":"16pGh"}],"fCxFf":[function(require,module,exports) {
+},{"../dropDownMenuMarkup":"fCxFf","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../apiCalls/blockUser":"8csVB","../apiCalls/markNotificationsAsVisualized":"4SFvT","../apiCalls/deleteMessages":"bT0rf","xss-filters":"fuEAa"}],"fCxFf":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 const dropDownMenuMarkup = (isGroup)=>{
@@ -9993,21 +10018,7 @@ const dropDownMenuMarkup = (isGroup)=>{
 };
 exports.default = dropDownMenuMarkup;
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"cbFCu":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "deleteMessages", ()=>deleteMessages);
-var _axios = require("axios");
-var _axiosDefault = parcelHelpers.interopDefault(_axios);
-const deleteMessages = async (room)=>{
-    const res = await (0, _axiosDefault.default)({
-        method: "DELETE",
-        url: `/api/v1/users/deleteMessages/${room}`
-    });
-    console.log(res);
-};
-
-},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"16pGh":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"8csVB":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "blockUser", ()=>blockUser);
@@ -10027,6 +10038,1084 @@ const unblockUser = async (room)=>{
         method: "PATCH"
     });
     console.log(res);
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"bT0rf":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "deleteMessages", ()=>deleteMessages);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const deleteMessages = async (room)=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "DELETE",
+        url: `/api/v1/users/deleteMessages/${room}`
+    });
+    console.log(res);
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"fuEAa":[function(require,module,exports) {
+/*
+Copyright (c) 2015, Yahoo! Inc. All rights reserved.
+Copyrights licensed under the New BSD License.
+See the accompanying LICENSE file for terms.
+
+Authors: Nera Liu <neraliu@yahoo-inc.com>
+         Adonis Fung <adon@yahoo-inc.com>
+         Albert Yu <albertyu@yahoo-inc.com>
+*/ /*jshint node: true */ exports._getPrivFilters = function() {
+    var LT = /</g, QUOT = /"/g, SQUOT = /'/g, AMP = /&/g, NULL = /\x00/g, SPECIAL_ATTR_VALUE_UNQUOTED_CHARS = /(?:^$|[\x00\x09-\x0D "'`=<>])/g, SPECIAL_HTML_CHARS = /[&<>"'`]/g, SPECIAL_COMMENT_CHARS = /(?:\x00|^-*!?>|--!?>|--?!?$|\]>|\]$)/g;
+    // CSS sensitive chars: ()"'/,!*@{}:;
+    // By CSS: (Tab|NewLine|colon|semi|lpar|rpar|apos|sol|comma|excl|ast|midast);|(quot|QUOT)
+    // By URI_PROTOCOL: (Tab|NewLine);
+    var SENSITIVE_HTML_ENTITIES = /&(?:#([xX][0-9A-Fa-f]+|\d+);?|(Tab|NewLine|colon|semi|lpar|rpar|apos|sol|comma|excl|ast|midast|ensp|emsp|thinsp);|(nbsp|amp|AMP|lt|LT|gt|GT|quot|QUOT);?)/g, SENSITIVE_NAMED_REF_MAP = {
+        Tab: "	",
+        NewLine: "\n",
+        colon: ":",
+        semi: ";",
+        lpar: "(",
+        rpar: ")",
+        apos: "'",
+        sol: "/",
+        comma: ",",
+        excl: "!",
+        ast: "*",
+        midast: "*",
+        ensp: "\u2002",
+        emsp: "\u2003",
+        thinsp: "\u2009",
+        nbsp: "\xa0",
+        amp: "&",
+        lt: "<",
+        gt: ">",
+        quot: '"',
+        QUOT: '"'
+    };
+    // var CSS_VALID_VALUE = 
+    //     /^(?:
+    //     (?!-*expression)#?[-\w]+
+    //     |[+-]?(?:\d+|\d*\.\d+)(?:em|ex|ch|rem|px|mm|cm|in|pt|pc|%|vh|vw|vmin|vmax)?
+    //     |!important
+    //     | //empty
+    //     )$/i;
+    var CSS_VALID_VALUE = /^(?:(?!-*expression)#?[-\w]+|[+-]?(?:\d+|\d*\.\d+)(?:r?em|ex|ch|cm|mm|in|px|pt|pc|%|vh|vw|vmin|vmax)?|!important|)$/i, // TODO: prevent double css escaping by not encoding \ again, but this may require CSS decoding
+    // \x7F and \x01-\x1F less \x09 are for Safari 5.0, added []{}/* for unbalanced quote
+    CSS_DOUBLE_QUOTED_CHARS = /[\x00-\x1F\x7F\[\]{}\\"]/g, CSS_SINGLE_QUOTED_CHARS = /[\x00-\x1F\x7F\[\]{}\\']/g, // (, \u207D and \u208D can be used in background: 'url(...)' in IE, assumed all \ chars are encoded by QUOTED_CHARS, and null is already replaced with \uFFFD
+    // otherwise, use this CSS_BLACKLIST instead (enhance it with url matching): /(?:\\?\(|[\u207D\u208D]|\\0{0,4}28 ?|\\0{0,2}20[78][Dd] ?)+/g
+    CSS_BLACKLIST = /url[\(\u207D\u208D]+/g, // this assumes encodeURI() and encodeURIComponent() has escaped 1-32, 127 for IE8
+    CSS_UNQUOTED_URL = /['\(\)]/g; // " \ treated by encodeURI()
+    // Given a full URI, need to support "[" ( IPv6address ) "]" in URI as per RFC3986
+    // Reference: https://tools.ietf.org/html/rfc3986
+    var URL_IPV6 = /\/\/%5[Bb]([A-Fa-f0-9:]+)%5[Dd]/;
+    // Reference: http://shazzer.co.uk/database/All/characters-allowd-in-html-entities
+    // Reference: http://shazzer.co.uk/vector/Characters-allowed-after-ampersand-in-named-character-references
+    // Reference: http://shazzer.co.uk/database/All/Characters-before-javascript-uri
+    // Reference: http://shazzer.co.uk/database/All/Characters-after-javascript-uri
+    // Reference: https://html.spec.whatwg.org/multipage/syntax.html#consume-a-character-reference
+    // Reference for named characters: https://html.spec.whatwg.org/multipage/entities.json
+    var URI_BLACKLIST_PROTOCOLS = {
+        "javascript": 1,
+        "data": 1,
+        "vbscript": 1,
+        "mhtml": 1,
+        "x-schema": 1
+    }, URI_PROTOCOL_COLON = /(?::|&#[xX]0*3[aA];?|&#0*58;?|&colon;)/, URI_PROTOCOL_WHITESPACES = /(?:^[\x00-\x20]+|[\t\n\r\x00]+)/g, URI_PROTOCOL_NAMED_REF_MAP = {
+        Tab: "	",
+        NewLine: "\n"
+    };
+    var x, strReplace = function(s, regexp, callback) {
+        return s === undefined ? "undefined" : s === null ? "null" : s.toString().replace(regexp, callback);
+    }, fromCodePoint = String.fromCodePoint || function(codePoint) {
+        if (arguments.length === 0) return "";
+        if (codePoint <= 0xFFFF) return String.fromCharCode(codePoint);
+        // Astral code point; split in surrogate halves
+        // http://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
+        codePoint -= 0x10000;
+        return String.fromCharCode((codePoint >> 10) + 0xD800, codePoint % 0x400 + 0xDC00);
+    };
+    function getProtocol(str) {
+        var s = str.split(URI_PROTOCOL_COLON, 2);
+        // str.length !== s[0].length is for older IE (e.g., v8), where delimeter residing at last will result in length equals 1, but not 2
+        return s[0] && (s.length === 2 || str.length !== s[0].length) ? s[0] : null;
+    }
+    function htmlDecode(s, namedRefMap, reNamedRef, skipReplacement) {
+        namedRefMap = namedRefMap || SENSITIVE_NAMED_REF_MAP;
+        reNamedRef = reNamedRef || SENSITIVE_HTML_ENTITIES;
+        function regExpFunction(m, num, named, named1) {
+            if (num) {
+                num = Number(num[0] <= "9" ? num : "0" + num);
+                // switch(num) {
+                //     case 0x80: return '\u20AC';  // EURO SIGN (€)
+                //     case 0x82: return '\u201A';  // SINGLE LOW-9 QUOTATION MARK (‚)
+                //     case 0x83: return '\u0192';  // LATIN SMALL LETTER F WITH HOOK (ƒ)
+                //     case 0x84: return '\u201E';  // DOUBLE LOW-9 QUOTATION MARK („)
+                //     case 0x85: return '\u2026';  // HORIZONTAL ELLIPSIS (…)
+                //     case 0x86: return '\u2020';  // DAGGER (†)
+                //     case 0x87: return '\u2021';  // DOUBLE DAGGER (‡)
+                //     case 0x88: return '\u02C6';  // MODIFIER LETTER CIRCUMFLEX ACCENT (ˆ)
+                //     case 0x89: return '\u2030';  // PER MILLE SIGN (‰)
+                //     case 0x8A: return '\u0160';  // LATIN CAPITAL LETTER S WITH CARON (Š)
+                //     case 0x8B: return '\u2039';  // SINGLE LEFT-POINTING ANGLE QUOTATION MARK (‹)
+                //     case 0x8C: return '\u0152';  // LATIN CAPITAL LIGATURE OE (Œ)
+                //     case 0x8E: return '\u017D';  // LATIN CAPITAL LETTER Z WITH CARON (Ž)
+                //     case 0x91: return '\u2018';  // LEFT SINGLE QUOTATION MARK (‘)
+                //     case 0x92: return '\u2019';  // RIGHT SINGLE QUOTATION MARK (’)
+                //     case 0x93: return '\u201C';  // LEFT DOUBLE QUOTATION MARK (“)
+                //     case 0x94: return '\u201D';  // RIGHT DOUBLE QUOTATION MARK (”)
+                //     case 0x95: return '\u2022';  // BULLET (•)
+                //     case 0x96: return '\u2013';  // EN DASH (–)
+                //     case 0x97: return '\u2014';  // EM DASH (—)
+                //     case 0x98: return '\u02DC';  // SMALL TILDE (˜)
+                //     case 0x99: return '\u2122';  // TRADE MARK SIGN (™)
+                //     case 0x9A: return '\u0161';  // LATIN SMALL LETTER S WITH CARON (š)
+                //     case 0x9B: return '\u203A';  // SINGLE RIGHT-POINTING ANGLE QUOTATION MARK (›)
+                //     case 0x9C: return '\u0153';  // LATIN SMALL LIGATURE OE (œ)
+                //     case 0x9E: return '\u017E';  // LATIN SMALL LETTER Z WITH CARON (ž)
+                //     case 0x9F: return '\u0178';  // LATIN CAPITAL LETTER Y WITH DIAERESIS (Ÿ)
+                // }
+                // // num >= 0xD800 && num <= 0xDFFF, and 0x0D is separately handled, as it doesn't fall into the range of x.pec()
+                // return (num >= 0xD800 && num <= 0xDFFF) || num === 0x0D ? '\uFFFD' : x.frCoPt(num);
+                return skipReplacement ? fromCodePoint(num) : num === 0x80 ? "\u20AC" // EURO SIGN (€)
+                 : num === 0x82 ? "\u201A" // SINGLE LOW-9 QUOTATION MARK (‚)
+                 : num === 0x83 ? "\u0192" // LATIN SMALL LETTER F WITH HOOK (ƒ)
+                 : num === 0x84 ? "\u201E" // DOUBLE LOW-9 QUOTATION MARK („)
+                 : num === 0x85 ? "\u2026" // HORIZONTAL ELLIPSIS (…)
+                 : num === 0x86 ? "\u2020" // DAGGER (†)
+                 : num === 0x87 ? "\u2021" // DOUBLE DAGGER (‡)
+                 : num === 0x88 ? "\u02C6" // MODIFIER LETTER CIRCUMFLEX ACCENT (ˆ)
+                 : num === 0x89 ? "\u2030" // PER MILLE SIGN (‰)
+                 : num === 0x8A ? "\u0160" // LATIN CAPITAL LETTER S WITH CARON (Š)
+                 : num === 0x8B ? "\u2039" // SINGLE LEFT-POINTING ANGLE QUOTATION MARK (‹)
+                 : num === 0x8C ? "\u0152" // LATIN CAPITAL LIGATURE OE (Œ)
+                 : num === 0x8E ? "\u017D" // LATIN CAPITAL LETTER Z WITH CARON (Ž)
+                 : num === 0x91 ? "\u2018" // LEFT SINGLE QUOTATION MARK (‘)
+                 : num === 0x92 ? "\u2019" // RIGHT SINGLE QUOTATION MARK (’)
+                 : num === 0x93 ? "\u201C" // LEFT DOUBLE QUOTATION MARK (“)
+                 : num === 0x94 ? "\u201D" // RIGHT DOUBLE QUOTATION MARK (”)
+                 : num === 0x95 ? "\u2022" // BULLET (•)
+                 : num === 0x96 ? "\u2013" // EN DASH (–)
+                 : num === 0x97 ? "\u2014" // EM DASH (—)
+                 : num === 0x98 ? "\u02DC" // SMALL TILDE (˜)
+                 : num === 0x99 ? "\u2122" // TRADE MARK SIGN (™)
+                 : num === 0x9A ? "\u0161" // LATIN SMALL LETTER S WITH CARON (š)
+                 : num === 0x9B ? "\u203A" // SINGLE RIGHT-POINTING ANGLE QUOTATION MARK (›)
+                 : num === 0x9C ? "\u0153" // LATIN SMALL LIGATURE OE (œ)
+                 : num === 0x9E ? "\u017E" // LATIN SMALL LETTER Z WITH CARON (ž)
+                 : num === 0x9F ? "\u0178" // LATIN CAPITAL LETTER Y WITH DIAERESIS (Ÿ)
+                 : num >= 0xD800 && num <= 0xDFFF || num === 0x0D ? "\uFFFD" : x.frCoPt(num);
+            }
+            return namedRefMap[named || named1] || m;
+        }
+        return s === undefined ? "undefined" : s === null ? "null" : s.toString().replace(NULL, "\uFFFD").replace(reNamedRef, regExpFunction);
+    }
+    function cssEncode(chr) {
+        // space after \\HEX is needed by spec
+        return "\\" + chr.charCodeAt(0).toString(16).toLowerCase() + " ";
+    }
+    function cssBlacklist(s) {
+        return s.replace(CSS_BLACKLIST, function(m) {
+            return "-x-" + m;
+        });
+    }
+    function cssUrl(s) {
+        // encodeURI() in yufull() will throw error for use of the CSS_UNSUPPORTED_CODE_POINT (i.e., [\uD800-\uDFFF])
+        s = x.yufull(htmlDecode(s));
+        var protocol = getProtocol(s);
+        // prefix ## for blacklisted protocols
+        // here .replace(URI_PROTOCOL_WHITESPACES, '') is not needed since yufull has already percent-encoded the whitespaces
+        return protocol && URI_BLACKLIST_PROTOCOLS[protocol.toLowerCase()] ? "##" + s : s;
+    }
+    return x = {
+        // turn invalid codePoints and that of non-characters to \uFFFD, and then fromCodePoint()
+        frCoPt: function(num) {
+            return num === undefined || num === null ? "" : !isFinite(num = Number(num)) || // `NaN`, `+Infinity`, or `-Infinity`
+            num <= 0 || // not a valid Unicode code point
+            num > 0x10FFFF || // not a valid Unicode code point
+            // Math.floor(num) != num || 
+            num >= 0x01 && num <= 0x08 || num >= 0x0E && num <= 0x1F || num >= 0x7F && num <= 0x9F || num >= 0xFDD0 && num <= 0xFDEF || num === 0x0B || (num & 0xFFFF) === 0xFFFF || (num & 0xFFFF) === 0xFFFE ? "\uFFFD" : fromCodePoint(num);
+        },
+        d: htmlDecode,
+        /*
+         * @param {string} s - An untrusted uri input
+         * @returns {string} s - null if relative url, otherwise the protocol with whitespaces stripped and lower-cased
+         */ yup: function(s) {
+            s = getProtocol(s.replace(NULL, ""));
+            // URI_PROTOCOL_WHITESPACES is required for left trim and remove interim whitespaces
+            return s ? htmlDecode(s, URI_PROTOCOL_NAMED_REF_MAP, null, true).replace(URI_PROTOCOL_WHITESPACES, "").toLowerCase() : null;
+        },
+        /*
+         * @deprecated
+         * @param {string} s - An untrusted user input
+         * @returns {string} s - The original user input with & < > " ' ` encoded respectively as &amp; &lt; &gt; &quot; &#39; and &#96;.
+         *
+         */ y: function(s) {
+            return strReplace(s, SPECIAL_HTML_CHARS, function(m) {
+                return m === "&" ? "&amp;" : m === "<" ? "&lt;" : m === ">" ? "&gt;" : m === '"' ? "&quot;" : m === "'" ? "&#39;" : /*m === '`'*/ "&#96;"; // in hex: 60
+            });
+        },
+        // This filter is meant to introduce double-encoding, and should be used with extra care.
+        ya: function(s) {
+            return strReplace(s, AMP, "&amp;");
+        },
+        // FOR DETAILS, refer to inHTMLData()
+        // Reference: https://html.spec.whatwg.org/multipage/syntax.html#data-state
+        yd: function(s) {
+            return strReplace(s, LT, "&lt;");
+        },
+        // FOR DETAILS, refer to inHTMLComment()
+        // All NULL characters in s are first replaced with \uFFFD.
+        // If s contains -->, --!>, or starts with -*>, insert a space right before > to stop state breaking at <!--{{{yc s}}}-->
+        // If s ends with --!, --, or -, append a space to stop collaborative state breaking at {{{yc s}}}>, {{{yc s}}}!>, {{{yc s}}}-!>, {{{yc s}}}->
+        // Reference: https://html.spec.whatwg.org/multipage/syntax.html#comment-state
+        // Reference: http://shazzer.co.uk/vector/Characters-that-close-a-HTML-comment-3
+        // Reference: http://shazzer.co.uk/vector/Characters-that-close-a-HTML-comment
+        // Reference: http://shazzer.co.uk/vector/Characters-that-close-a-HTML-comment-0021
+        // If s contains ]> or ends with ], append a space after ] is verified in IE to stop IE conditional comments.
+        // Reference: http://msdn.microsoft.com/en-us/library/ms537512%28v=vs.85%29.aspx
+        // We do not care --\s>, which can possibly be intepreted as a valid close comment tag in very old browsers (e.g., firefox 3.6), as specified in the html4 spec
+        // Reference: http://www.w3.org/TR/html401/intro/sgmltut.html#h-3.2.4
+        yc: function(s) {
+            return strReplace(s, SPECIAL_COMMENT_CHARS, function(m) {
+                return m === "\0" ? "\uFFFD" : m === "--!" || m === "--" || m === "-" || m === "]" ? m + " " : /*
+                    :  m === ']>'   ? '] >'
+                    :  m === '-->'  ? '-- >'
+                    :  m === '--!>' ? '--! >'
+                    : /-*!?>/.test(m) ? */ m.slice(0, -1) + " >";
+            });
+        },
+        // FOR DETAILS, refer to inDoubleQuotedAttr()
+        // Reference: https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(double-quoted)-state
+        yavd: function(s) {
+            return strReplace(s, QUOT, "&quot;");
+        },
+        // FOR DETAILS, refer to inSingleQuotedAttr()
+        // Reference: https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(single-quoted)-state
+        yavs: function(s) {
+            return strReplace(s, SQUOT, "&#39;");
+        },
+        // FOR DETAILS, refer to inUnQuotedAttr()
+        // PART A.
+        // if s contains any state breaking chars (\t, \n, \v, \f, \r, space, and >),
+        // they are escaped and encoded into their equivalent HTML entity representations. 
+        // Reference: http://shazzer.co.uk/database/All/Characters-which-break-attributes-without-quotes
+        // Reference: https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(unquoted)-state
+        //
+        // PART B. 
+        // if s starts with ', " or `, encode it resp. as &#39;, &quot;, or &#96; to 
+        // enforce the attr value (unquoted) state
+        // Reference: https://html.spec.whatwg.org/multipage/syntax.html#before-attribute-value-state
+        // Reference: http://shazzer.co.uk/vector/Characters-allowed-attribute-quote
+        // 
+        // PART C.
+        // Inject a \uFFFD character if an empty or all null string is encountered in 
+        // unquoted attribute value state.
+        // 
+        // Rationale 1: our belief is that developers wouldn't expect an 
+        //   empty string would result in ' name="passwd"' rendered as 
+        //   attribute value, even though this is how HTML5 is specified.
+        // Rationale 2: an empty or all null string (for IE) can 
+        //   effectively alter its immediate subsequent state, we choose
+        //   \uFFFD to end the unquoted attr 
+        //   state, which therefore will not mess up later contexts.
+        // Rationale 3: Since IE 6, it is verified that NULL chars are stripped.
+        // Reference: https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(unquoted)-state
+        // 
+        // Example:
+        // <input value={{{yavu s}}} name="passwd"/>
+        yavu: function(s) {
+            return strReplace(s, SPECIAL_ATTR_VALUE_UNQUOTED_CHARS, function(m) {
+                return m === "	" ? "&#9;" // in hex: 09
+                 : m === "\n" ? "&#10;" // in hex: 0A
+                 : m === "\v" ? "&#11;" // in hex: 0B  for IE. IE<9 \v equals v, so use \x0B instead
+                 : m === "\f" ? "&#12;" // in hex: 0C
+                 : m === "\r" ? "&#13;" // in hex: 0D
+                 : m === " " ? "&#32;" // in hex: 20
+                 : m === "=" ? "&#61;" // in hex: 3D
+                 : m === "<" ? "&lt;" : m === ">" ? "&gt;" : m === '"' ? "&quot;" : m === "'" ? "&#39;" : m === "`" ? "&#96;" : /*empty or null*/ "\uFFFD";
+            });
+        },
+        yu: encodeURI,
+        yuc: encodeURIComponent,
+        // Notice that yubl MUST BE APPLIED LAST, and will not be used independently (expected output from encodeURI/encodeURIComponent and yavd/yavs/yavu)
+        // This is used to disable JS execution capabilities by prefixing x- to ^javascript:, ^vbscript: or ^data: that possibly could trigger script execution in URI attribute context
+        yubl: function(s) {
+            return URI_BLACKLIST_PROTOCOLS[x.yup(s)] ? "x-" + s : s;
+        },
+        // This is NOT a security-critical filter.
+        // Reference: https://tools.ietf.org/html/rfc3986
+        yufull: function(s) {
+            return x.yu(s).replace(URL_IPV6, function(m, p) {
+                return "//[" + p + "]";
+            });
+        },
+        // chain yufull() with yubl()
+        yublf: function(s) {
+            return x.yubl(x.yufull(s));
+        },
+        // The design principle of the CSS filter MUST meet the following goal(s).
+        // (1) The input cannot break out of the context (expr) and this is to fulfill the just sufficient encoding principle.
+        // (2) The input cannot introduce CSS parsing error and this is to address the concern of UI redressing.
+        //
+        // term
+        //   : unary_operator?
+        //     [ NUMBER S* | PERCENTAGE S* | LENGTH S* | EMS S* | EXS S* | ANGLE S* |
+        //     TIME S* | FREQ S* ]
+        //   | STRING S* | IDENT S* | URI S* | hexcolor | function
+        // 
+        // Reference:
+        // * http://www.w3.org/TR/CSS21/grammar.html 
+        // * http://www.w3.org/TR/css-syntax-3/
+        // 
+        // NOTE: delimiter in CSS -  \  _  :  ;  (  )  "  '  /  ,  %  #  !  *  @  .  {  }
+        //                        2d 5c 5f 3a 3b 28 29 22 27 2f 2c 25 23 21 2a 40 2e 7b 7d
+        yceu: function(s) {
+            s = htmlDecode(s);
+            return CSS_VALID_VALUE.test(s) ? s : ";-x:'" + cssBlacklist(s.replace(CSS_SINGLE_QUOTED_CHARS, cssEncode)) + "';-v:";
+        },
+        // string1 = \"([^\n\r\f\\"]|\\{nl}|\\[^\n\r\f0-9a-f]|\\[0-9a-f]{1,6}(\r\n|[ \n\r\t\f])?)*\"
+        yced: function(s) {
+            return cssBlacklist(htmlDecode(s).replace(CSS_DOUBLE_QUOTED_CHARS, cssEncode));
+        },
+        // string2 = \'([^\n\r\f\\']|\\{nl}|\\[^\n\r\f0-9a-f]|\\[0-9a-f]{1,6}(\r\n|[ \n\r\t\f])?)*\'
+        yces: function(s) {
+            return cssBlacklist(htmlDecode(s).replace(CSS_SINGLE_QUOTED_CHARS, cssEncode));
+        },
+        // for url({{{yceuu url}}}
+        // unquoted_url = ([!#$%&*-~]|\\{h}{1,6}(\r\n|[ \t\r\n\f])?|\\[^\r\n\f0-9a-f])* (CSS 2.1 definition)
+        // unquoted_url = ([^"'()\\ \t\n\r\f\v\u0000\u0008\u000b\u000e-\u001f\u007f]|\\{h}{1,6}(\r\n|[ \t\r\n\f])?|\\[^\r\n\f0-9a-f])* (CSS 3.0 definition)
+        // The state machine in CSS 3.0 is more well defined - http://www.w3.org/TR/css-syntax-3/#consume-a-url-token0
+        // CSS_UNQUOTED_URL = /['\(\)]/g; // " \ treated by encodeURI()   
+        yceuu: function(s) {
+            return cssUrl(s).replace(CSS_UNQUOTED_URL, function(chr) {
+                return chr === "'" ? "\\27 " : chr === "(" ? "%28" : /* chr === ')' ? */ "%29";
+            });
+        },
+        // for url("{{{yceud url}}}
+        yceud: function(s) {
+            return cssUrl(s);
+        },
+        // for url('{{{yceus url}}}
+        yceus: function(s) {
+            return cssUrl(s).replace(SQUOT, "\\27 ");
+        }
+    };
+};
+// exposing privFilters
+// this is an undocumented feature, and please use it with extra care
+var privFilters = exports._privFilters = exports._getPrivFilters();
+/* chaining filters */ // uriInAttr and literally uriPathInAttr
+// yubl is always used 
+// Rationale: given pattern like this: <a href="{{{uriPathInDoubleQuotedAttr s}}}">
+//            developer may expect s is always prefixed with ? or /, but an attacker can abuse it with 'javascript:alert(1)'
+function uriInAttr(s, yav, yu) {
+    return privFilters.yubl(yav((yu || privFilters.yufull)(s)));
+}
+/** 
+* Yahoo Secure XSS Filters - just sufficient output filtering to prevent XSS!
+* @module xss-filters 
+*/ /**
+* @function module:xss-filters#inHTMLData
+*
+* @param {string} s - An untrusted user input
+* @returns {string} The string s with '<' encoded as '&amp;lt;'
+*
+* @description
+* This filter is to be placed in HTML Data context to encode all '<' characters into '&amp;lt;'
+* <ul>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#data-state">HTML5 Data State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <div>{{{inHTMLData htmlData}}}</div>
+*
+*/ exports.inHTMLData = privFilters.yd;
+/**
+* @function module:xss-filters#inHTMLComment
+*
+* @param {string} s - An untrusted user input
+* @returns {string} All NULL characters in s are first replaced with \uFFFD. If s contains -->, --!>, or starts with -*>, insert a space right before > to stop state breaking at <!--{{{yc s}}}-->. If s ends with --!, --, or -, append a space to stop collaborative state breaking at {{{yc s}}}>, {{{yc s}}}!>, {{{yc s}}}-!>, {{{yc s}}}->. If s contains ]> or ends with ], append a space after ] is verified in IE to stop IE conditional comments.
+*
+* @description
+* This filter is to be placed in HTML Comment context
+* <ul>
+* <li><a href="http://shazzer.co.uk/vector/Characters-that-close-a-HTML-comment-3">Shazzer - Closing comments for -.-></a>
+* <li><a href="http://shazzer.co.uk/vector/Characters-that-close-a-HTML-comment">Shazzer - Closing comments for --.></a>
+* <li><a href="http://shazzer.co.uk/vector/Characters-that-close-a-HTML-comment-0021">Shazzer - Closing comments for .></a>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#comment-start-state">HTML5 Comment Start State</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#comment-start-dash-state">HTML5 Comment Start Dash State</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#comment-state">HTML5 Comment State</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#comment-end-dash-state">HTML5 Comment End Dash State</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#comment-end-state">HTML5 Comment End State</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#comment-end-bang-state">HTML5 Comment End Bang State</a></li>
+* <li><a href="http://msdn.microsoft.com/en-us/library/ms537512%28v=vs.85%29.aspx">Conditional Comments in Internet Explorer</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <!-- {{{inHTMLComment html_comment}}} -->
+*
+*/ exports.inHTMLComment = privFilters.yc;
+/**
+* @function module:xss-filters#inSingleQuotedAttr
+*
+* @param {string} s - An untrusted user input
+* @returns {string} The string s with any single-quote characters encoded into '&amp;&#39;'.
+*
+* @description
+* <p class="warning">Warning: This is NOT designed for any onX (e.g., onclick) attributes!</p>
+* <p class="warning">Warning: If you're working on URI/components, use the more specific uri___InSingleQuotedAttr filter </p>
+* This filter is to be placed in HTML Attribute Value (single-quoted) state to encode all single-quote characters into '&amp;&#39;'
+*
+* <ul>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(single-quoted)-state">HTML5 Attribute Value (Single-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <input name='firstname' value='{{{inSingleQuotedAttr firstname}}}' />
+*
+*/ exports.inSingleQuotedAttr = privFilters.yavs;
+/**
+* @function module:xss-filters#inDoubleQuotedAttr
+*
+* @param {string} s - An untrusted user input
+* @returns {string} The string s with any single-quote characters encoded into '&amp;&quot;'.
+*
+* @description
+* <p class="warning">Warning: This is NOT designed for any onX (e.g., onclick) attributes!</p>
+* <p class="warning">Warning: If you're working on URI/components, use the more specific uri___InDoubleQuotedAttr filter </p>
+* This filter is to be placed in HTML Attribute Value (double-quoted) state to encode all single-quote characters into '&amp;&quot;'
+*
+* <ul>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(double-quoted)-state">HTML5 Attribute Value (Double-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <input name="firstname" value="{{{inDoubleQuotedAttr firstname}}}" />
+*
+*/ exports.inDoubleQuotedAttr = privFilters.yavd;
+/**
+* @function module:xss-filters#inUnQuotedAttr
+*
+* @param {string} s - An untrusted user input
+* @returns {string} If s contains any state breaking chars (\t, \n, \v, \f, \r, space, null, ', ", `, <, >, and =), they are escaped and encoded into their equivalent HTML entity representations. If the string is empty, inject a \uFFFD character.
+*
+* @description
+* <p class="warning">Warning: This is NOT designed for any onX (e.g., onclick) attributes!</p>
+* <p class="warning">Warning: If you're working on URI/components, use the more specific uri___InUnQuotedAttr filter </p>
+* <p>Regarding \uFFFD injection, given <a id={{{id}}} name="passwd">,<br/>
+*        Rationale 1: our belief is that developers wouldn't expect when id equals an
+*          empty string would result in ' name="passwd"' rendered as 
+*          attribute value, even though this is how HTML5 is specified.<br/>
+*        Rationale 2: an empty or all null string (for IE) can 
+*          effectively alter its immediate subsequent state, we choose
+*          \uFFFD to end the unquoted attr 
+*          state, which therefore will not mess up later contexts.<br/>
+*        Rationale 3: Since IE 6, it is verified that NULL chars are stripped.<br/>
+*        Reference: https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(unquoted)-state</p>
+* <ul>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(unquoted)-state">HTML5 Attribute Value (Unquoted) State</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#before-attribute-value-state">HTML5 Before Attribute Value State</a></li>
+* <li><a href="http://shazzer.co.uk/database/All/Characters-which-break-attributes-without-quotes">Shazzer - Characters-which-break-attributes-without-quotes</a></li>
+* <li><a href="http://shazzer.co.uk/vector/Characters-allowed-attribute-quote">Shazzer - Characters-allowed-attribute-quote</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <input name="firstname" value={{{inUnQuotedAttr firstname}}} />
+*
+*/ exports.inUnQuotedAttr = privFilters.yavu;
+/**
+* @function module:xss-filters#uriInSingleQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly an <strong>absolute</strong> URI
+* @returns {string} The string s encoded first by window.encodeURI(), then inSingleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (single-quoted) state for an <strong>absolute</strong> URI.<br/>
+* The correct order of encoders is thus: first window.encodeURI(), then inSingleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* <p>Notice: This filter is IPv6 friendly by not encoding '[' and ']'.</p>
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(single-quoted)-state">HTML5 Attribute Value (Single-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href='{{{uriInSingleQuotedAttr full_uri}}}'>link</a>
+* 
+*/ exports.uriInSingleQuotedAttr = function(s) {
+    return uriInAttr(s, privFilters.yavs);
+};
+/**
+* @function module:xss-filters#uriInDoubleQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly an <strong>absolute</strong> URI
+* @returns {string} The string s encoded first by window.encodeURI(), then inDoubleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (double-quoted) state for an <strong>absolute</strong> URI.<br/>
+* The correct order of encoders is thus: first window.encodeURI(), then inDoubleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* <p>Notice: This filter is IPv6 friendly by not encoding '[' and ']'.</p>
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(double-quoted)-state">HTML5 Attribute Value (Double-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href="{{{uriInDoubleQuotedAttr full_uri}}}">link</a>
+* 
+*/ exports.uriInDoubleQuotedAttr = function(s) {
+    return uriInAttr(s, privFilters.yavd);
+};
+/**
+* @function module:xss-filters#uriInUnQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly an <strong>absolute</strong> URI
+* @returns {string} The string s encoded first by window.encodeURI(), then inUnQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (unquoted) state for an <strong>absolute</strong> URI.<br/>
+* The correct order of encoders is thus: first the built-in encodeURI(), then inUnQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* <p>Notice: This filter is IPv6 friendly by not encoding '[' and ']'.</p>
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(unquoted)-state">HTML5 Attribute Value (Unquoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href={{{uriInUnQuotedAttr full_uri}}}>link</a>
+* 
+*/ exports.uriInUnQuotedAttr = function(s) {
+    return uriInAttr(s, privFilters.yavu);
+};
+/**
+* @function module:xss-filters#uriInHTMLData
+*
+* @param {string} s - An untrusted user input, supposedly an <strong>absolute</strong> URI
+* @returns {string} The string s encoded by window.encodeURI() and then inHTMLData()
+*
+* @description
+* This filter is to be placed in HTML Data state for an <strong>absolute</strong> URI.
+*
+* <p>Notice: The actual implementation skips inHTMLData(), since '<' is already encoded as '%3C' by encodeURI().</p>
+* <p>Notice: This filter is IPv6 friendly by not encoding '[' and ']'.</p>
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#data-state">HTML5 Data State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href="/somewhere">{{{uriInHTMLData full_uri}}}</a>
+* 
+*/ exports.uriInHTMLData = privFilters.yufull;
+/**
+* @function module:xss-filters#uriInHTMLComment
+*
+* @param {string} s - An untrusted user input, supposedly an <strong>absolute</strong> URI
+* @returns {string} The string s encoded by window.encodeURI(), and finally inHTMLComment()
+*
+* @description
+* This filter is to be placed in HTML Comment state for an <strong>absolute</strong> URI.
+*
+* <p>Notice: This filter is IPv6 friendly by not encoding '[' and ']'.</p>
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#data-state">HTML5 Data State</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#comment-state">HTML5 Comment State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <!-- {{{uriInHTMLComment full_uri}}} -->
+* 
+*/ exports.uriInHTMLComment = function(s) {
+    return privFilters.yc(privFilters.yufull(s));
+};
+/**
+* @function module:xss-filters#uriPathInSingleQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly a URI Path/Query or relative URI
+* @returns {string} The string s encoded first by window.encodeURI(), then inSingleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (single-quoted) state for a URI Path/Query or relative URI.<br/>
+* The correct order of encoders is thus: first window.encodeURI(), then inSingleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(single-quoted)-state">HTML5 Attribute Value (Single-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href='http://example.com/{{{uriPathInSingleQuotedAttr uri_path}}}'>link</a>
+* <a href='http://example.com/?{{{uriQueryInSingleQuotedAttr uri_query}}}'>link</a>
+* 
+*/ exports.uriPathInSingleQuotedAttr = function(s) {
+    return uriInAttr(s, privFilters.yavs, privFilters.yu);
+};
+/**
+* @function module:xss-filters#uriPathInDoubleQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly a URI Path/Query or relative URI
+* @returns {string} The string s encoded first by window.encodeURI(), then inDoubleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (double-quoted) state for a URI Path/Query or relative URI.<br/>
+* The correct order of encoders is thus: first window.encodeURI(), then inDoubleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(double-quoted)-state">HTML5 Attribute Value (Double-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href="http://example.com/{{{uriPathInDoubleQuotedAttr uri_path}}}">link</a>
+* <a href="http://example.com/?{{{uriQueryInDoubleQuotedAttr uri_query}}}">link</a>
+* 
+*/ exports.uriPathInDoubleQuotedAttr = function(s) {
+    return uriInAttr(s, privFilters.yavd, privFilters.yu);
+};
+/**
+* @function module:xss-filters#uriPathInUnQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly a URI Path/Query or relative URI
+* @returns {string} The string s encoded first by window.encodeURI(), then inUnQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (unquoted) state for a URI Path/Query or relative URI.<br/>
+* The correct order of encoders is thus: first the built-in encodeURI(), then inUnQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(unquoted)-state">HTML5 Attribute Value (Unquoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href=http://example.com/{{{uriPathInUnQuotedAttr uri_path}}}>link</a>
+* <a href=http://example.com/?{{{uriQueryInUnQuotedAttr uri_query}}}>link</a>
+* 
+*/ exports.uriPathInUnQuotedAttr = function(s) {
+    return uriInAttr(s, privFilters.yavu, privFilters.yu);
+};
+/**
+* @function module:xss-filters#uriPathInHTMLData
+*
+* @param {string} s - An untrusted user input, supposedly a URI Path/Query or relative URI
+* @returns {string} The string s encoded by window.encodeURI() and then inHTMLData()
+*
+* @description
+* This filter is to be placed in HTML Data state for a URI Path/Query or relative URI.
+*
+* <p>Notice: The actual implementation skips inHTMLData(), since '<' is already encoded as '%3C' by encodeURI().</p>
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#data-state">HTML5 Data State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href="http://example.com/">http://example.com/{{{uriPathInHTMLData uri_path}}}</a>
+* <a href="http://example.com/">http://example.com/?{{{uriQueryInHTMLData uri_query}}}</a>
+* 
+*/ exports.uriPathInHTMLData = privFilters.yu;
+/**
+* @function module:xss-filters#uriPathInHTMLComment
+*
+* @param {string} s - An untrusted user input, supposedly a URI Path/Query or relative URI
+* @returns {string} The string s encoded by window.encodeURI(), and finally inHTMLComment()
+*
+* @description
+* This filter is to be placed in HTML Comment state for a URI Path/Query or relative URI.
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI">encodeURI | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#data-state">HTML5 Data State</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#comment-state">HTML5 Comment State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <!-- http://example.com/{{{uriPathInHTMLComment uri_path}}} -->
+* <!-- http://example.com/?{{{uriQueryInHTMLComment uri_query}}} -->
+*/ exports.uriPathInHTMLComment = function(s) {
+    return privFilters.yc(privFilters.yu(s));
+};
+/**
+* @function module:xss-filters#uriQueryInSingleQuotedAttr
+* @description This is an alias of {@link module:xss-filters#uriPathInSingleQuotedAttr}
+* 
+* @alias module:xss-filters#uriPathInSingleQuotedAttr
+*/ exports.uriQueryInSingleQuotedAttr = exports.uriPathInSingleQuotedAttr;
+/**
+* @function module:xss-filters#uriQueryInDoubleQuotedAttr
+* @description This is an alias of {@link module:xss-filters#uriPathInDoubleQuotedAttr}
+* 
+* @alias module:xss-filters#uriPathInDoubleQuotedAttr
+*/ exports.uriQueryInDoubleQuotedAttr = exports.uriPathInDoubleQuotedAttr;
+/**
+* @function module:xss-filters#uriQueryInUnQuotedAttr
+* @description This is an alias of {@link module:xss-filters#uriPathInUnQuotedAttr}
+* 
+* @alias module:xss-filters#uriPathInUnQuotedAttr
+*/ exports.uriQueryInUnQuotedAttr = exports.uriPathInUnQuotedAttr;
+/**
+* @function module:xss-filters#uriQueryInHTMLData
+* @description This is an alias of {@link module:xss-filters#uriPathInHTMLData}
+* 
+* @alias module:xss-filters#uriPathInHTMLData
+*/ exports.uriQueryInHTMLData = exports.uriPathInHTMLData;
+/**
+* @function module:xss-filters#uriQueryInHTMLComment
+* @description This is an alias of {@link module:xss-filters#uriPathInHTMLComment}
+* 
+* @alias module:xss-filters#uriPathInHTMLComment
+*/ exports.uriQueryInHTMLComment = exports.uriPathInHTMLComment;
+/**
+* @function module:xss-filters#uriComponentInSingleQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly a URI Component
+* @returns {string} The string s encoded first by window.encodeURIComponent(), then inSingleQuotedAttr()
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (single-quoted) state for a URI Component.<br/>
+* The correct order of encoders is thus: first window.encodeURIComponent(), then inSingleQuotedAttr()
+*
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent">encodeURIComponent | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(single-quoted)-state">HTML5 Attribute Value (Single-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href='http://example.com/?q={{{uriComponentInSingleQuotedAttr uri_component}}}'>link</a>
+* 
+*/ exports.uriComponentInSingleQuotedAttr = function(s) {
+    return privFilters.yavs(privFilters.yuc(s));
+};
+/**
+* @function module:xss-filters#uriComponentInDoubleQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly a URI Component
+* @returns {string} The string s encoded first by window.encodeURIComponent(), then inDoubleQuotedAttr()
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (double-quoted) state for a URI Component.<br/>
+* The correct order of encoders is thus: first window.encodeURIComponent(), then inDoubleQuotedAttr()
+*
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent">encodeURIComponent | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(double-quoted)-state">HTML5 Attribute Value (Double-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href="http://example.com/?q={{{uriComponentInDoubleQuotedAttr uri_component}}}">link</a>
+* 
+*/ exports.uriComponentInDoubleQuotedAttr = function(s) {
+    return privFilters.yavd(privFilters.yuc(s));
+};
+/**
+* @function module:xss-filters#uriComponentInUnQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly a URI Component
+* @returns {string} The string s encoded first by window.encodeURIComponent(), then inUnQuotedAttr()
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (unquoted) state for a URI Component.<br/>
+* The correct order of encoders is thus: first the built-in encodeURIComponent(), then inUnQuotedAttr()
+*
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent">encodeURIComponent | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(unquoted)-state">HTML5 Attribute Value (Unquoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href=http://example.com/?q={{{uriComponentInUnQuotedAttr uri_component}}}>link</a>
+* 
+*/ exports.uriComponentInUnQuotedAttr = function(s) {
+    return privFilters.yavu(privFilters.yuc(s));
+};
+/**
+* @function module:xss-filters#uriComponentInHTMLData
+*
+* @param {string} s - An untrusted user input, supposedly a URI Component
+* @returns {string} The string s encoded by window.encodeURIComponent() and then inHTMLData()
+*
+* @description
+* This filter is to be placed in HTML Data state for a URI Component.
+*
+* <p>Notice: The actual implementation skips inHTMLData(), since '<' is already encoded as '%3C' by encodeURIComponent().</p>
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent">encodeURIComponent | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#data-state">HTML5 Data State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href="http://example.com/">http://example.com/?q={{{uriComponentInHTMLData uri_component}}}</a>
+* <a href="http://example.com/">http://example.com/#{{{uriComponentInHTMLData uri_fragment}}}</a>
+* 
+*/ exports.uriComponentInHTMLData = privFilters.yuc;
+/**
+* @function module:xss-filters#uriComponentInHTMLComment
+*
+* @param {string} s - An untrusted user input, supposedly a URI Component
+* @returns {string} The string s encoded by window.encodeURIComponent(), and finally inHTMLComment()
+*
+* @description
+* This filter is to be placed in HTML Comment state for a URI Component.
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent">encodeURIComponent | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#data-state">HTML5 Data State</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#comment-state">HTML5 Comment State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <!-- http://example.com/?q={{{uriComponentInHTMLComment uri_component}}} -->
+* <!-- http://example.com/#{{{uriComponentInHTMLComment uri_fragment}}} -->
+*/ exports.uriComponentInHTMLComment = function(s) {
+    return privFilters.yc(privFilters.yuc(s));
+};
+// uriFragmentInSingleQuotedAttr
+// added yubl on top of uriComponentInAttr 
+// Rationale: given pattern like this: <a href='{{{uriFragmentInSingleQuotedAttr s}}}'>
+//            developer may expect s is always prefixed with #, but an attacker can abuse it with 'javascript:alert(1)'
+/**
+* @function module:xss-filters#uriFragmentInSingleQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly a URI Fragment
+* @returns {string} The string s encoded first by window.encodeURIComponent(), then inSingleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (single-quoted) state for a URI Fragment.<br/>
+* The correct order of encoders is thus: first window.encodeURIComponent(), then inSingleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent">encodeURIComponent | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(single-quoted)-state">HTML5 Attribute Value (Single-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href='http://example.com/#{{{uriFragmentInSingleQuotedAttr uri_fragment}}}'>link</a>
+* 
+*/ exports.uriFragmentInSingleQuotedAttr = function(s) {
+    return privFilters.yubl(privFilters.yavs(privFilters.yuc(s)));
+};
+// uriFragmentInDoubleQuotedAttr
+// added yubl on top of uriComponentInAttr 
+// Rationale: given pattern like this: <a href="{{{uriFragmentInDoubleQuotedAttr s}}}">
+//            developer may expect s is always prefixed with #, but an attacker can abuse it with 'javascript:alert(1)'
+/**
+* @function module:xss-filters#uriFragmentInDoubleQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly a URI Fragment
+* @returns {string} The string s encoded first by window.encodeURIComponent(), then inDoubleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (double-quoted) state for a URI Fragment.<br/>
+* The correct order of encoders is thus: first window.encodeURIComponent(), then inDoubleQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent">encodeURIComponent | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(double-quoted)-state">HTML5 Attribute Value (Double-Quoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href="http://example.com/#{{{uriFragmentInDoubleQuotedAttr uri_fragment}}}">link</a>
+* 
+*/ exports.uriFragmentInDoubleQuotedAttr = function(s) {
+    return privFilters.yubl(privFilters.yavd(privFilters.yuc(s)));
+};
+// uriFragmentInUnQuotedAttr
+// added yubl on top of uriComponentInAttr 
+// Rationale: given pattern like this: <a href={{{uriFragmentInUnQuotedAttr s}}}>
+//            developer may expect s is always prefixed with #, but an attacker can abuse it with 'javascript:alert(1)'
+/**
+* @function module:xss-filters#uriFragmentInUnQuotedAttr
+*
+* @param {string} s - An untrusted user input, supposedly a URI Fragment
+* @returns {string} The string s encoded first by window.encodeURIComponent(), then inUnQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* @description
+* This filter is to be placed in HTML Attribute Value (unquoted) state for a URI Fragment.<br/>
+* The correct order of encoders is thus: first the built-in encodeURIComponent(), then inUnQuotedAttr(), and finally prefix the resulted string with 'x-' if it begins with 'javascript:' or 'vbscript:' that could possibly lead to script execution
+*
+* <ul>
+* <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent">encodeURIComponent | MDN</a></li>
+* <li><a href="http://tools.ietf.org/html/rfc3986">RFC 3986</a></li>
+* <li><a href="https://html.spec.whatwg.org/multipage/syntax.html#attribute-value-(unquoted)-state">HTML5 Attribute Value (Unquoted) State</a></li>
+* </ul>
+*
+* @example
+* // output context to be applied by this filter.
+* <a href=http://example.com/#{{{uriFragmentInUnQuotedAttr uri_fragment}}}>link</a>
+* 
+*/ exports.uriFragmentInUnQuotedAttr = function(s) {
+    return privFilters.yubl(privFilters.yavu(privFilters.yuc(s)));
+};
+/**
+* @function module:xss-filters#uriFragmentInHTMLData
+* @description This is an alias of {@link module:xss-filters#uriComponentInHTMLData}
+* 
+* @alias module:xss-filters#uriComponentInHTMLData
+*/ exports.uriFragmentInHTMLData = exports.uriComponentInHTMLData;
+/**
+* @function module:xss-filters#uriFragmentInHTMLComment
+* @description This is an alias of {@link module:xss-filters#uriComponentInHTMLComment}
+* 
+* @alias module:xss-filters#uriComponentInHTMLComment
+*/ exports.uriFragmentInHTMLComment = exports.uriComponentInHTMLComment;
+
+},{}],"creMx":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "updateUserProfileImage", ()=>updateUserProfileImage);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const updateUserProfileImage = async (data)=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "PATCH",
+        url: "/api/v1/users/updateUserProfileImage",
+        data
+    });
+    console.log(res);
+    if (res.data.status === "success") location.assign("/");
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"7OYCV":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "login", ()=>login);
+parcelHelpers.export(exports, "singup", ()=>singup);
+parcelHelpers.export(exports, "logout", ()=>logout);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const login = async (email, password)=>{
+    console.log(email);
+    console.log(password);
+    try {
+        const res = await (0, _axiosDefault.default)({
+            method: "POST",
+            url: "/api/v1/users/login",
+            data: {
+                email,
+                password
+            }
+        });
+        console.log(res);
+        if (res.data.status === "success") window.setTimeout(()=>{
+            location.assign("/");
+        }, 1500);
+    } catch (err) {
+        console.error(err.response.data.message);
+    }
+};
+const singup = async (name, email, password, passwordConfirm)=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "POST",
+        url: "/api/v1/users/singup",
+        data: {
+            name,
+            email,
+            password,
+            passwordConfirm
+        }
+    });
+    console.log(res);
+    if (res.data.status === "success") setTimeout(()=>{
+        location.assign("/");
+    }, 4000);
+};
+const logout = async ()=>{
+    try {
+        const res = await (0, _axiosDefault.default)({
+            method: "GET",
+            url: "/api/v1/users/logout"
+        });
+        if (res.data.status === "success") location.reload(true);
+    } catch (err) {
+        console.log(err);
+    }
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"aaVXD":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "search", ()=>search);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const search = async (data)=>{
+    try {
+        const res1 = await (0, _axiosDefault.default)({
+            method: "GET",
+            url: "/api/v1/users/search?search=" + data
+        });
+        console.log(res1);
+        return res1.data.data.users;
+    } catch (err) {
+        console.error("error mine", err);
+    }
+    return res;
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"anm2V":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "singInWithGoogle", ()=>singInWithGoogle);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const singInWithGoogle = async ()=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "GET",
+        url: "/api/v1/users/auth/sing-in-with-google"
+    });
+    if (res.data.status === "success") location.assign("/");
 };
 
 },{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["hhrAs","f2QDv"], "f2QDv", "parcelRequire1ab2")

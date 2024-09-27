@@ -14,5 +14,6 @@ export const createGroup = async (data, socket) => {
     console.log("ROOM:", res.data.room);
     const { maybeParticipants } = res.data.data;
     socket.emit("issueInvitations", maybeParticipants, res.data.room);
+    location.assign("/");
   }
 };

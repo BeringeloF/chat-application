@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import { AppError } from "../helpers/appError.js";
 import crypto from "crypto";
 import { redis } from "./socketController.js";
+import xssFilters from "xss-filters";
 
 const singToken = (id, refresh = false) => {
   if (!refresh) {
@@ -27,7 +28,7 @@ const singToken = (id, refresh = false) => {
  * @param {boolean} sendResponse True by defualt. if false won´t send the response to the client
  *
  */
-const createSendToken = function (user, statusCode, res, sendResponse = true) {
+const createSendToken = function (user, statusCode, res, redirect = false) {
   const token = singToken(user._id);
 
   //Aqui nos iremos implementar cookies, eles sao texto que nos envimos com alguma informaçao sensivel que apenas o navegador pode acessar e nao pode ser modificado
@@ -46,20 +47,22 @@ const createSendToken = function (user, statusCode, res, sendResponse = true) {
 
   user.password = undefined;
 
-  if (sendResponse) {
-    res.status(statusCode).json({
-      status: "success",
-      token,
-      data: {
-        user,
-      },
-    });
+  if (redirect) {
+    res.redirect("/");
   }
+
+  res.status(statusCode).json({
+    status: "success",
+    token,
+    data: {
+      user,
+    },
+  });
 };
 
 export const singup = catchAsync(async (req, res, next) => {
   const newUser = await User.create({
-    name: req.body.name,
+    name: xssFilters.inHTMLData(req.body.name),
     email: req.body.email,
     password: req.body.password,
     passwordConfirm: req.body.passwordConfirm,
@@ -112,6 +115,10 @@ export const login = catchAsync(async (req, res, next) => {
   }
   // if everything is correct send access token
   createSendToken(user, 200, res);
+});
+
+export const loginWithGoogle = catchAsync(async (req, res, next) => {
+  createSendToken(req.user, 200, res, true);
 });
 
 export const logout = catchAsync(async (req, res, next) => {

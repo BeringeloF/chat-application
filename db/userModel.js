@@ -8,6 +8,12 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, "Please provid a name"],
   },
+
+  googleId: {
+    type: String,
+    unique: true,
+  },
+
   email: {
     type: String,
     required: [true, "Please provid an email"],
@@ -23,7 +29,9 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, "Please provid a password"],
+    required: function () {
+      return !this.googleId; // O password só será obrigatório se o googleId não estiver presente
+    },
     minLength: 8,
     select: false,
   },
@@ -39,7 +47,9 @@ const userSchema = new mongoose.Schema({
 
   passwordConfirm: {
     type: String,
-    required: [true, "Please confirm your password"],
+    required: function () {
+      return !this.googleId; // O password só será obrigatório se o googleId não estiver presente
+    },
     validate: {
       //ISSO APENAS FUNCIONA EM SAVE/CREATE  E NAO EM UPDATE
       validator: function (val) {
