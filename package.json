@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon ./server.js",
-    "parcel": "parcel ./public/js/index.js --dist-dir ./public/dist"
+    "start": "node server.js",
+    "parcel": "parcel ./public/js/index.js --dist-dir ./public/dist",
+    "build": "parcel build ./public/js/index.js --dist-dir ./public/final"
   },
   "keywords": [],
   "author": "",
