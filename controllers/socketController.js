@@ -3,7 +3,13 @@ import Redis from "ioredis";
 import { getUserObj, getRoomObj } from "../helpers/getObjFromRedis.js";
 import xssFilters from "xss-filters";
 
-export const redis = new Redis();
+export const redis = new Redis({
+  host: process.env.REDIS_HOST, // Host do Redis
+  port: process.env.REDIS_PORT, // Porta do Redis
+  password: process.env.REDIS_PASSWORD, // Senha do Redis (se necessário)
+  tls: process.env.REDIS_TLS === "true" ? {} : undefined, // Para conexões seguras
+});
+
 redis.on("error", (err) => {
   console.error("Erro ao conectar ao Redis:", err);
 });
