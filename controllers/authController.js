@@ -139,7 +139,7 @@ export const protect = catchAsync(async (req, res, next) => {
   if (req.cookies.jwt) {
     token = req.cookies.jwt;
   }
-  if (!token) res.redirect("/login");
+  if (!token) return res.redirect("/login");
   //verification token
   //Aqui nos iremos verificar se o token e valido usando o verify que aceita como primeiro argumento o token e segundo o secret
   //E como terceiro argumento uma callback function que é executada assim que sua acao for finalizada ou seja este verify é um aync method
