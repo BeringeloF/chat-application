@@ -12,6 +12,7 @@ import passport from "./controllers/passport-setup.js";
 import { sanitizeXss } from "./middleware/sanitizeXss.js";
 import ExpressMongoSanitize from "express-mongo-sanitize";
 import compression from "compression";
+import { AppError } from "./helpers/appError.js";
 
 const app = express();
 const server = createServer(app);
@@ -67,7 +68,7 @@ app.use(compression());
 
 app.use(ExpressMongoSanitize());
 
-app.use("/chat", viewRouter);
+app.use("/", viewRouter);
 app.get(
   "/oauth/google",
   passport.authenticate("google", { session: false }),

@@ -1,0 +1,20 @@
+doctype html
+html(lang="en")
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title Error Page
+    link(rel="stylesheet" href="/css/style.css")
+  body
+   .error-page
+    .error-container
+      .error-content
+        svg.error-icon(xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round")
+          circle(cx="12" cy="12" r="10")
+          line(x1="12" y1="8" x2="12" y2="12")
+          line(x1="12" y1="16" x2="12.01" y2="16")
+        h1.error-title Oops! Something went wrong
+        p.error-message#errorMessage= msg
+        .error-actions
+          a.btn.btn-secondary(href="/") Back to Chat
+
