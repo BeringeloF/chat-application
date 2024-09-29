@@ -6,7 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
     "parcel": "parcel ./public/js/index.js --dist-dir ./public/dist",
-    "build": "npx parcel build ./public/js/index.js --dist-dir ./public/final"
+    "build": "parcel build ./public/js/index.js --dist-dir ./public/final"
   },
   "keywords": [],
   "author": "",

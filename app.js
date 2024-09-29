@@ -75,6 +75,10 @@ app.get(
 );
 app.use("/api/v1/users", userRouter);
 
+app.all("*", (req, res, next) => {
+  next(new AppError(`cant find ${req.originalUrl} on this server`, 404));
+});
+
 app.use(errorHandler);
 
 export default server;
