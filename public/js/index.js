@@ -6,6 +6,13 @@ import groupManager from "./appManager/groupManager.js";
 import chatManager from "./appManager/chatManager.js";
 import { updateUserProfileImage } from "./apiCalls/updateUserProfileImage.js";
 import { singInWithGoogle } from "./apiCalls/singInWithGoogle.js";
+import process from "process/browser";
+import { Buffer } from "buffer";
+import axios from "axios";
+
+// Tornar process e Buffer globais
+window.process = process;
+window.Buffer = Buffer;
 
 class App {
   #socket = io();
