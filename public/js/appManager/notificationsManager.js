@@ -161,9 +161,9 @@ class Notification {
               notification.triggeredBy.name.split(" ")[0]
             }</p>
             <div class="invitation-container">
-              <p>Do you want to accept ${
+              <p>Do you want to join to a chat with ${
                 notification.triggeredBy.name.split(" ")[0]
-              }'s invitation to join the group?</p>
+              }</p>
               <div class="button-group">
                   <button class="accept-invitation" data-user-id="${
                     notification.triggeredBy.id

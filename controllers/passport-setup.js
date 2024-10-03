@@ -20,7 +20,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "/oauth/google",
+      callbackURL: "https://chat-application-n87o.onrender.com/oauth/google",
     },
     async (accessToken, refreshToken, profile, done) => {
       try {

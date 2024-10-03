@@ -69,6 +69,7 @@ app.use(compression());
 app.use(ExpressMongoSanitize());
 
 app.use("/", viewRouter);
+
 app.get(
   "/oauth/google",
   passport.authenticate("google", { session: false }),
