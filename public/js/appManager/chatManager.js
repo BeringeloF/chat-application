@@ -28,7 +28,7 @@ class Chat {
     const isGroup = room.includes("GROUP");
     this.#main.innerHTML = "";
 
-    await viewNotification(room);
+    viewNotification(room);
 
     //el.querySelector(`.user-message-preview`).textContent = "";
 
