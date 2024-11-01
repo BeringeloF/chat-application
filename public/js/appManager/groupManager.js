@@ -1,16 +1,16 @@
-import { updateGroup } from "../apiCalls/updateGroup.js";
-import { createGroup } from "../apiCalls/createGroup.js";
+import { updateGroup } from '../apiCalls/updateGroup.js';
+import { createGroup } from '../apiCalls/createGroup.js';
 import {
   leaveGroup,
   selectNewGroupAdminAndLeave,
-} from "../apiCalls/leaveGroup.js";
-import { getUser } from "../apiCalls/getUser.js";
+} from '../apiCalls/leaveGroup.js';
+import { getUser } from '../apiCalls/getUser.js';
 
 class Group {
-  #main = document.querySelector(".main-content");
+  #main = document.querySelector('.main-content');
   myId;
   async displayCreateGroupForm(socket) {
-    this.#main.innerHTML = "";
+    this.#main.innerHTML = '';
     const createGroupFormMarkup = `
         <div class="div"> 
         <div class="form-container">
@@ -44,7 +44,7 @@ class Group {
         </div>
         `;
     try {
-      const res = await fetch("/api/v1/users/getContacts");
+      const res = await fetch('/api/v1/users/getContacts');
       const { data } = await res.json();
       console.log(data);
       const contactsMarkup = data
@@ -52,59 +52,59 @@ class Group {
           return `
            <li data-user-id="${el.id}">
                 <img class="user-avatar"src="/img/users/${el.image}">
-                <span class="contact-name">${el.name.split(" ")[0]}</span>
+                <span class="contact-name">${el.name.split(' ')[0]}</span>
                 <button class="add-contact-btn">+</button>
            </li>`;
         })
-        .join("");
+        .join('');
 
-      this.#main.insertAdjacentHTML("afterbegin", createGroupFormMarkup);
-      const listContainer = document.querySelector(".contact-list");
+      this.#main.insertAdjacentHTML('afterbegin', createGroupFormMarkup);
+      const listContainer = document.querySelector('.contact-list');
       listContainer.innerHTML = contactsMarkup;
-      listContainer.addEventListener("click", this.#addToGroup.bind(this));
-      const createGroupForm = this.#main.querySelector(".create-group-form");
-      createGroupForm.addEventListener("submit", async (e) => {
+      listContainer.addEventListener('click', this.#addToGroup.bind(this));
+      const createGroupForm = this.#main.querySelector('.create-group-form');
+      createGroupForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(createGroupForm);
         createGroup(formData, socket);
-        console.log("trying to create group...");
+        console.log('trying to create group...');
       });
     } catch (err) {
-      console.error("💥", err);
+      console.error('💥', err);
     }
   }
 
   #addToGroup(e) {
-    if (!e.target.classList.contains("add-contact-btn")) return;
+    if (!e.target.classList.contains('add-contact-btn')) return;
     const btn = e.target;
-    if (!btn.classList.contains("clicked")) {
-      btn.classList.add("clicked");
-      const id = btn.closest("li").getAttribute("data-user-id");
-      btn.textContent = "Added";
+    if (!btn.classList.contains('clicked')) {
+      btn.classList.add('clicked');
+      const id = btn.closest('li').getAttribute('data-user-id');
+      btn.textContent = 'Added';
 
-      const participants = this.#main.querySelector("#hidden-input");
+      const participants = this.#main.querySelector('#hidden-input');
       participants.value += ` ${id}`;
     } else {
-      const participants = this.#main.querySelector("#hidden-input");
-      const participantsArray = participants.value.trim().split(" ");
-      const id = btn.closest("li").getAttribute("data-user-id");
+      const participants = this.#main.querySelector('#hidden-input');
+      const participantsArray = participants.value.trim().split(' ');
+      const id = btn.closest('li').getAttribute('data-user-id');
       const index = participantsArray.findIndex((el) => el === id);
       participantsArray.splice(index, 1);
-      participants.value = participantsArray.join(" ");
-      btn.classList.remove("clicked");
-      btn.textContent = "+";
+      participants.value = participantsArray.join(' ');
+      btn.classList.remove('clicked');
+      btn.textContent = '+';
     }
   }
 
   async displayUpdateGroupForm(socket, e) {
-    const room = e.target.closest(".user-item").dataset.room;
+    const room = e.target.closest('.user-item').dataset.room;
 
-    if (room.includes("CHAT") || !e.target.closest(".update-group")) return;
-    console.log("displayUpdateGroupFrom was called");
+    if (room.includes('CHAT') || !e.target.closest('.update-group')) return;
+    console.log('displayUpdateGroupFrom was called');
 
-    const groupJson = await fetch(`/api/v1/users/group/${room}`);
+    const groupJson = await fetch(`/api/v1/groups/${room}`);
     const groupData = (await groupJson.json()).data;
-    const res = await fetch("/api/v1/users/getContacts");
+    const res = await fetch('/api/v1/users/getContacts');
     const { data } = await res.json();
 
     const contacts = data.filter(
@@ -118,13 +118,13 @@ class Group {
         return `
        <li data-user-id="${el.id}">
             <img class="user-avatar"src="/img/users/${el.image}">
-            <span class="contact-name">${el.name.split(" ")[0]}</span>
+            <span class="contact-name">${el.name.split(' ')[0]}</span>
             <button class="add-contact-btn">+</button>
        </li>`;
       })
-      .join("");
+      .join('');
 
-    this.#main.innerHTML = "";
+    this.#main.innerHTML = '';
 
     const editGroupFormMarkup = `
     <div class="div"> 
@@ -158,26 +158,26 @@ class Group {
       </div>
     </div>
     `;
-    this.#main.insertAdjacentHTML("afterbegin", editGroupFormMarkup);
-    const listContainer = document.querySelector(".contact-list");
-    listContainer.addEventListener("click", this.#addToGroup.bind(this));
-    const editGroupForm = this.#main.querySelector(".create-group-form");
-    editGroupForm.addEventListener("submit", async (e) => {
+    this.#main.insertAdjacentHTML('afterbegin', editGroupFormMarkup);
+    const listContainer = document.querySelector('.contact-list');
+    listContainer.addEventListener('click', this.#addToGroup.bind(this));
+    const editGroupForm = this.#main.querySelector('.create-group-form');
+    editGroupForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const formData = new FormData(editGroupForm);
-      console.log("ROOM", room);
+      console.log('ROOM', room);
       updateGroup(formData, socket, room);
-      console.log("trying to edit group...");
+      console.log('trying to edit group...');
     });
   }
 
   async displayGroupInformation(e) {
     try {
-      const room = e.target.closest(".user-item").dataset.room;
-      if (room.includes("CHAT") || !e.target.closest(".show-info")) return;
+      const room = e.target.closest('.user-item').dataset.room;
+      if (room.includes('CHAT') || !e.target.closest('.show-info')) return;
       console.log(e.target);
       const groupJson = await fetch(
-        `/api/v1/users/group/${room}?getParticipantsObj=true`
+        `/api/v1/groups/${room}?getParticipantsObj=true`
       );
       const groupData = (await groupJson.json()).data;
       const creator =
@@ -185,7 +185,7 @@ class Group {
           (el) => el.id === groupData.createdBy
         )[0] || (await getUser(groupData.createdBy));
 
-      this.#main.innerHTML = "";
+      this.#main.innerHTML = '';
       console.log(creator);
       const participantsMarkup = groupData.participants
         .map((el) => {
@@ -198,7 +198,7 @@ class Group {
       </div>
       `;
         })
-        .join("");
+        .join('');
       const markup = `
   
     <div class="dtz-container">
@@ -233,21 +233,21 @@ class Group {
   `;
       this.#main.innerHTML = markup;
     } catch (err) {
-      console.error("ERROR MINE", err);
+      console.error('ERROR MINE', err);
     }
   }
 
   async displayLeaveGroupPopUp(e) {
-    const room = e.target.closest(".user-item").dataset.room;
-    if (room.includes("CHAT") || !e.target.closest(".leave-group")) return;
+    const room = e.target.closest('.user-item').dataset.room;
+    if (room.includes('CHAT') || !e.target.closest('.leave-group')) return;
 
-    const body = document.querySelector("body");
+    const body = document.querySelector('body');
 
     const groupJson = await fetch(
-      `/api/v1/users/group/${room}?getParticipantsObj=true`
+      `/api/v1/groups/${room}?getParticipantsObj=true`
     );
     const groupData = (await groupJson.json()).data;
-    const id = room.split("-")[1];
+    const id = room.split('-')[1];
     let markup;
     if (this.myId === id && groupData.participants.length > 1) {
       const optionsMarkup = groupData.participants
@@ -255,7 +255,7 @@ class Group {
         .map((el) => {
           return `<option value="${el.id}">${el.name}</option>`;
         })
-        .join("");
+        .join('');
       markup = `<div class="xyz-overlay" id="xyz-overlay">
   <div class="xyz-dialog">
     <div class="xyz-dialog-content">
@@ -292,22 +292,22 @@ class Group {
   </div>`;
     }
 
-    body.insertAdjacentHTML("beforeend", markup);
+    body.insertAdjacentHTML('beforeend', markup);
     openModal();
     document
-      .querySelector(".xyz-button-outline")
-      .addEventListener("click", function () {
+      .querySelector('.xyz-button-outline')
+      .addEventListener('click', function () {
         closeModal();
       });
 
     document
-      .querySelector(".xyz-leave-button")
-      .addEventListener("click", async (e) => {
-        const select = document.querySelector("#xyz-new-admin");
+      .querySelector('.xyz-leave-button')
+      .addEventListener('click', async (e) => {
+        const select = document.querySelector('#xyz-new-admin');
         if (select) {
           const newAdmin = select.value;
           if (!newAdmin)
-            return alert("you should select a new admin before leaving!");
+            return alert('you should select a new admin before leaving!');
           selectNewGroupAdminAndLeave({ newAdmin, room });
           closeModal();
         } else {
@@ -319,14 +319,14 @@ class Group {
 }
 
 function openModal() {
-  document.querySelector(".xyz-overlay").style.display = "flex"; // Show the overlay and modal
+  document.querySelector('.xyz-overlay').style.display = 'flex'; // Show the overlay and modal
 }
 
 function closeModal() {
-  const overlay = document.querySelector(".xyz-overlay");
-  const dialog = document.querySelector(".xyz-dialog");
-  overlay.style.display = "none";
-  const body = document.querySelector("body");
+  const overlay = document.querySelector('.xyz-overlay');
+  const dialog = document.querySelector('.xyz-dialog');
+  overlay.style.display = 'none';
+  const body = document.querySelector('body');
   body.removeChild(overlay);
 }
 

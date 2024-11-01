@@ -1,17 +1,17 @@
-import passport from "passport";
-import passportGoogle from "passport-google-oauth20";
-import User from "../db/userModel.js";
-import { redis } from "./socketController.js";
-import dotenv from "dotenv";
-import { fileURLToPath } from "node:url";
-import path from "path";
-import { dirname, join } from "node:path";
-import axios from "axios";
-import fs from "fs";
+import passport from 'passport';
+import passportGoogle from 'passport-google-oauth20';
+import User from './db/userModel.js';
+import { redis } from './controllers/socketController.js';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import path from 'path';
+import { dirname, join } from 'node:path';
+import axios from 'axios';
+import fs from 'fs';
 
 const GoogleStrategy = passportGoogle.Strategy;
 
-dotenv.config({ path: "./config.env" });
+dotenv.config({ path: './config.env' });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -20,7 +20,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "https://chat-application-n87o.onrender.com/oauth/google",
+      callbackURL: 'https://chat-application-n87o.onrender.com/oauth/google',
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -47,12 +47,12 @@ passport.use(
           const imageUrl = photos[0].value;
           const imagePath = path.join(
             __dirname,
-            "../public/img/users",
+            './public/img/users',
             imageName
           );
           const response = await axios({
             url: imageUrl,
-            responseType: "stream",
+            responseType: 'stream',
           });
 
           // Salvar a imagem no servidor
@@ -61,8 +61,8 @@ passport.use(
 
           // Espera a imagem ser salva
           await new Promise((resolve, reject) => {
-            writer.on("finish", resolve);
-            writer.on("error", reject);
+            writer.on('finish', resolve);
+            writer.on('error', reject);
           });
 
           const resp = await redis.get(user._id.toString());

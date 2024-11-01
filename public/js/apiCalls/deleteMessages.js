@@ -1,10 +1,14 @@
-import axios from "axios";
+import axios from 'axios';
 
 export const deleteMessages = async (room) => {
-  const res = await axios({
-    method: "DELETE",
-    url: `/api/v1/users/deleteMessages/${room}`,
-  });
+  try {
+    const res = await axios({
+      method: 'DELETE',
+      url: `/api/v1/users/deleteMessages/${room}`,
+    });
 
-  console.log(res);
+    console.log(res);
+  } catch (err) {
+    console.error(err);
+  }
 };

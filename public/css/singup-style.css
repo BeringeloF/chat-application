@@ -1,6 +1,6 @@
 body {
   font-family: Arial, sans-serif;
-  background-color: #f3f4f6;
+  background-color: #1f1f20;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -15,7 +15,7 @@ body {
 }
 
 .card {
-  background-color: white;
+  background-color: rgb(12, 12, 12);
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -61,9 +61,11 @@ label {
 input {
   width: 100%;
   padding: 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid #474747;
   border-radius: 4px;
   font-size: 14px;
+  background-color: #121212;
+  color: wheat;
 }
 
 .btn {
@@ -117,7 +119,7 @@ input {
 
 .divider::before,
 .divider::after {
-  content: "";
+  content: '';
   flex: 1;
   border-bottom: 1px solid #d1d5db;
 }

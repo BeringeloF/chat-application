@@ -1,12 +1,14 @@
-import User from "../db/userModel.js";
-import catchAsync from "../helpers/catchAsync.js";
-import { AppError } from "../helpers/appError.js";
-import { redis } from "./socketController.js";
-import multer from "multer";
-import { getUserObj, getRoomObj } from "../helpers/getObjFromRedis.js";
-import path from "node:path";
-import sharp from "sharp";
-import xssFilters from "xss-filters";
+import User from '../db/userModel.js';
+import catchAsync from '../helpers/catchAsync.js';
+import { AppError } from '../helpers/appError.js';
+import { redis } from './socketController.js';
+import multer from 'multer';
+import { getUserObj, getRoomObj } from '../helpers/getObjFromRedis.js';
+import path from 'node:path';
+import xssFilters from 'xss-filters';
+import PrivateRoom from '../db/userToUserRoomModel.js';
+import Messages from '../db/messagesModel.js';
+import GroupRoom from '../db/groupRoomModel.js';
 
 export const getUsers = catchAsync(async (req, res, next) => {
   let filter = {};
@@ -20,7 +22,7 @@ export const getUsers = catchAsync(async (req, res, next) => {
   console.log(temp);
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     results: users.length,
     data: {
       users: users.filter((user) => user._id !== req.user._id),
@@ -33,13 +35,13 @@ export const getUser = catchAsync(async (req, res, next) => {
   if (!req.query.redisUser) {
     user = await User.findById(req.params.userId);
 
-    if (!user) return next(new AppError("user not found", 404));
+    if (!user) return next(new AppError('user not found', 404));
   } else {
     user = await getUserObj(req.params.userId);
   }
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     data: {
       user,
     },
@@ -49,13 +51,13 @@ export const getUser = catchAsync(async (req, res, next) => {
 export const getMe = catchAsync(async (req, res, next) => {
   if (req.query.onlyId) {
     return res.status(200).json({
-      status: "success",
+      status: 'success',
       userId: req.user._id.toString(),
     });
   }
   const user = await User.findById(req.user._id.toString());
   res.status(200).json({
-    status: "success",
+    status: 'success',
     user,
   });
 });
@@ -64,7 +66,7 @@ export const getNotifications = catchAsync(async (req, res, next) => {
   const userObj = await getUserObj(req.user._id.toString());
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     data: {
       chatNotifications: userObj.chatNotifications,
       serverNotifications: userObj.serverNotifications,
@@ -76,11 +78,38 @@ export const getServerNotifications = catchAsync(async (req, res, next) => {
   const userObj = await getUserObj(req.user._id.toString());
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     data: userObj.serverNotifications,
   });
 });
 
+async function markNotificationsAsVisualizedOnDB(
+  room,
+  myId,
+  secondIdIfServerNotification = false
+) {
+  try {
+    const user = await User.findById(myId);
+    if (!secondIdIfServerNotification) {
+      const index = user.chatNotifications.findIndex((el) => el.room === room);
+      index > -1 &&
+        user.chatNotifications.splice(index, 1) &&
+        (await user.save({ validateBeforeSave: false }));
+    } else {
+      const index = user.serverNotifications.findIndex(
+        (el) =>
+          el.room === room || el.triggeredBy.id === secondIdIfServerNotification
+      );
+      console.log(user);
+      index > -1 &&
+        user.serverNotifications.splice(index, 1) &&
+        (await user.save({ validateBeforeSave: false }));
+      console.log(user);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
 export const markNotificationsAsVisualized = catchAsync(
   async (req, res, next) => {
     const userObj = await getUserObj(req.user._id.toString());
@@ -88,6 +117,7 @@ export const markNotificationsAsVisualized = catchAsync(
     const { serverNotification } = req.query;
 
     if (!serverNotification) {
+      markNotificationsAsVisualizedOnDB(req.params.room, req.user._id);
       const index = userObj.chatNotifications.findIndex(
         (el) => el.room === req.params.room
       );
@@ -96,7 +126,7 @@ export const markNotificationsAsVisualized = catchAsync(
     } else {
       console.log(req.params);
       const id = req.params.room
-        .split("-")
+        .split('-')
         .slice(1)
         .filter((id) => id !== req.user._id.toString())[0];
 
@@ -106,11 +136,17 @@ export const markNotificationsAsVisualized = catchAsync(
       );
 
       index > -1 && userObj.serverNotifications.splice(index, 1);
+      markNotificationsAsVisualizedOnDB(req.params.room, req.user._id, id);
     }
 
-    await redis.set(req.user._id.toString(), JSON.stringify(userObj));
+    await redis.set(
+      req.user._id.toString(),
+      JSON.stringify(userObj),
+      'EX',
+      60 * 60 * 24 * 5
+    );
     res.status(204).json({
-      status: "success",
+      status: 'success',
       data: null,
     });
   }
@@ -118,28 +154,16 @@ export const markNotificationsAsVisualized = catchAsync(
 
 //Este filtro serve pra garantir que os unicos files que estao sendo carregados sao imagens
 const multerFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith("image")) {
+  if (file.mimetype.startsWith('image')) {
     cb(null, true);
   } else {
-    cb(new AppError("Not an image!, please upload only images", 400), false);
+    cb(new AppError('Not an image!, please upload only images', 400), false);
   }
 };
 
-//Agora para salvar apenas na memoria com um buffer nos fazer assim
-//Entao a imagem estara salva em req.file.buffer
-
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "./public/img/group/"); // Pasta onde os arquivos serão salvos
-  },
-  filename: (req, file, cb) => {
-    cb(null, `group-image-${Date.now()}-${path.extname(file.originalname)}`);
-  },
-});
-
-const storageTwo = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "./public/img/users/"); // Pasta onde os arquivos serão salvos
+    cb(null, './public/img/users/'); // Pasta onde os arquivos serão salvos
   },
   filename: (req, file, cb) => {
     cb(null, `user-image-${Date.now()}-${path.extname(file.originalname)}`);
@@ -151,135 +175,13 @@ const upload = multer({
   fileFilter: multerFilter,
 });
 
-const uploadTwo = multer({
-  storage: storageTwo,
-  fileFilter: multerFilter,
-});
-
-export const uploadUserImage = uploadTwo.single("photo");
-
-export const uploadGroupImage = upload.single("image");
-
-export const createGroup = catchAsync(async (req, res, next) => {
-  const date = Date.now();
-  const room = `GROUP-${req.user._id.toString()}-${date}`;
-  const participants = req.body.participants
-    .trim()
-    .split(" ")
-    .filter((id) => id !== "")
-    .map((id) => id);
-  const roomObj = {
-    name: req.body.name,
-    image: req.file.filename,
-    description: req.body.description,
-    messages: [],
-    doNotShowMessagesBeforeDateToThisUsers: [],
-    maybeParticipants: [...participants],
-    participants: [req.user._id.toString()],
-    createdBy: req.user._id.toString(),
-    createdAt: date,
-  };
-
-  const userObj = await getUserObj(req.user._id.toString());
-
-  userObj.rooms.push(room);
-
-  await Promise.all([
-    await redis.set(room, JSON.stringify(roomObj)),
-    await redis.set(req.user._id.toString(), JSON.stringify(userObj)),
-  ]);
-
-  res.status(201).json({
-    status: "success",
-    message: "group created successfuly!",
-    room,
-    data: roomObj,
-  });
-});
-
-export const updateGroup = catchAsync(async (req, res, next) => {
-  const groupObj = await getRoomObj(req.params.room);
-  req.body.participants = req.body.participants
-    .trim()
-    .split(" ")
-    .filter((id) => id !== "");
-
-  const newParticipants = req.body.participants.filter(
-    (id) =>
-      !groupObj.participants.includes(id) &&
-      !groupObj.maybeParticipants.includes(id)
-  );
-
-  const participants = [...newParticipants, ...groupObj.maybeParticipants];
-
-  if (req.file) groupObj.image = req.file.filename;
-
-  groupObj.name = req.body.name || groupObj.name;
-  groupObj.name = xssFilters.inHTMLData(groupObj.name);
-  groupObj.description = req.body.description || groupObj.description;
-  groupObj.description = xssFilters.inHTMLData(groupObj.description);
-  groupObj.maybeParticipants = participants;
-
-  await redis.set(req.params.room, JSON.stringify(groupObj));
-  res.status(200).json({
-    status: "success",
-    data: groupObj,
-  });
-});
-
-export const joinToGroup = catchAsync(async (req, res, next) => {
-  console.log("funçao join to group foi chamada");
-  const userObj = await getUserObj(req.user._id.toString());
-  if (!(await redis.get(req.params.room)))
-    return next(new AppError("invalid group room!", 400));
-
-  if (userObj.rooms.find((el) => el === req.params.room))
-    return next(new AppError("You are alredy joined to this group!", 400));
-
-  userObj.rooms.push(req.params.room);
-
-  console.log("CHEGOU AQUI? 1");
-  console.log(req.params.room);
-
-  let [_, roomObj] = await Promise.all([
-    await redis.set(req.user._id.toString(), JSON.stringify(userObj)),
-    redis.get(req.params.room),
-  ]);
-
-  console.log("apenas confirmando", roomObj);
-
-  roomObj = roomObj && JSON.parse(roomObj);
-
-  const index = roomObj.maybeParticipants.findIndex(
-    (el) => el === req.user._id.toString()
-  );
-  console.log("CHEGOU AQUI? 2");
-  console.log(roomObj);
-  console.log(index);
-
-  if (index > -1) {
-    roomObj.maybeParticipants.splice(index, 1);
-    roomObj.participants.push(req.user._id.toString());
-    console.log(roomObj);
-    await redis.set(req.params.room, JSON.stringify(roomObj));
-  } else {
-    return next(
-      new AppError("an unexpected error occured, try again later!", 500)
-    );
-  }
-
-  res.status(200).json({
-    status: "success",
-    data: userObj,
-    roomObj,
-  });
-});
+export const uploadUserImage = upload.single('photo');
 
 export const getContacts = catchAsync(async (req, res, next) => {
   const userObj = await getUserObj(req.user._id);
   const contactsPromises = userObj.rooms.map(async (room) => {
-    const arr = room.split("-");
-    if (arr.includes("CHAT")) {
+    const arr = room.split('-');
+    if (arr.includes('CHAT')) {
       arr.splice(0, 1);
       const contact = arr.find((el) => el !== req.user._id.toString());
       return JSON.parse(await redis.get(contact));
@@ -287,73 +189,8 @@ export const getContacts = catchAsync(async (req, res, next) => {
   });
   const contacts = (await Promise.all(contactsPromises)).filter((el) => el);
   res.status(200).json({
-    status: "success",
+    status: 'success',
     data: contacts,
-  });
-});
-
-export const createChat = catchAsync(async (req, res, next) => {
-  console.log(req.body);
-  if (req.body.id === req.user._id.toString())
-    return next(
-      new AppError(
-        "Error!, why are you trying to create a chat with yourself?",
-        400
-      )
-    );
-  const targetUser = await User.findById(req.body.id);
-  if (!targetUser) return next(new AppError("this user does not exist!", 404));
-  const room = `CHAT-${req.user._id}-${targetUser._id}`;
-
-  if (await redis.get(room)) {
-    return res.status(409).json({
-      status: "failed!",
-      message: "this chat has alredy been created",
-    });
-  }
-
-  const usersObj = await Promise.all([
-    getUserObj(req.user._id.toString()),
-    getUserObj(targetUser._id.toString()),
-  ]);
-
-  usersObj.forEach((el) => {
-    el.rooms.push(room);
-  });
-
-  const roomObj = {
-    messages: [],
-    doNotShowMessagesBeforeDateToThisUsers: [],
-  };
-
-  await Promise.all([
-    await redis.set(req.user._id.toString(), JSON.stringify(usersObj[0])),
-    await redis.set(targetUser._id.toString(), JSON.stringify(usersObj[1])),
-    await redis.set(room, JSON.stringify(roomObj)),
-  ]);
-
-  res.status(201).json({
-    status: "success",
-    room,
-  });
-});
-
-export const getGroup = catchAsync(async (req, res, next) => {
-  const groupJson = await redis.get(req.params.room);
-  if (!groupJson) return next(new AppError("could not find this group!", 404));
-  const group = JSON.parse(groupJson);
-
-  if (req.query.getParticipantsObj) {
-    const participantsPromise = group.participants.map(async (id) => {
-      return await getUserObj(id);
-    });
-    const participants = await Promise.all(participantsPromise);
-    group.participants = participants;
-  }
-
-  res.status(200).json({
-    status: "success",
-    data: group,
   });
 });
 
@@ -361,10 +198,10 @@ export const deleteMessages = catchAsync(async (req, res, next) => {
   const room = req.params.room;
   const roomObj = await getRoomObj(room);
   roomObj.messages = [];
-  await redis.set(room, JSON.stringify(roomObj));
+  await redis.set(room, JSON.stringify(roomObj), 'EX', 60 * 60 * 24 * 5);
 
   res.status(204).json({
-    status: "success",
+    status: 'success',
     data: null,
   });
 });
@@ -374,61 +211,57 @@ export const deleteNotifications = catchAsync(async (req, res, next) => {
   userObj.chatNotifications = [];
   userObj.serverNotifications = [];
 
-  await redis.set(req.params.id, JSON.stringify(userObj));
-
-  res.status(204).json({
-    status: "success",
-    data: null,
-  });
-});
-
-export const denyGroupInvitation = catchAsync(async (req, res, next) => {
-  const groupObj = await getRoomObj(req.body.room);
-
-  groupObj.maybeParticipants = groupObj.maybeParticipants.filter(
-    (id) => id !== req.user._id.toString()
+  await redis.set(
+    req.params.id,
+    JSON.stringify(userObj),
+    'EX',
+    60 * 60 * 24 * 5
   );
 
-  await redis.set(req.body.room, JSON.stringify(groupObj));
-
-  res.status(200).json({
-    status: "success",
-  });
-});
-
-export const removeInviteToGroup = catchAsync(async (req, res, next) => {
-  const groupObj = await getRoomObj(req.params.room);
-
-  if (!groupObj.maybeParticipants.includes(req.params.userId))
-    return next(
-      new AppError("there is no invite this user on the group!", 404)
-    );
-
-  groupObj.maybeParticipants = groupObj.maybeParticipants.filter(
-    (id) => id !== req.params.userId
-  );
-  await redis.set(req.params.room, JSON.stringify(groupObj));
   res.status(204).json({
-    status: "success",
+    status: 'success',
     data: null,
   });
 });
 
 export const deleteMessagesUI = catchAsync(async (req, res, next) => {
   const roomObj = await getRoomObj(req.params.room);
-
+  const date = Date.now() - 800;
   const obj = {
-    date: Date.now() - 800,
+    date,
     user: req.user._id.toString(),
   };
 
+  const roomFromDB = req.params.room.includes('CHAT')
+    ? await PrivateRoom.findById(req.params.room)
+    : await GroupRoom.findById(req.params.room);
+
   //get the participants of this room which could be a normal chat room or a group room
-  const participants = req.params.room.includes("CHAT")
-    ? req.params.room.split("-").slice(1)
+  const participants = req.params.room.includes('CHAT')
+    ? req.params.room.split('-').slice(1)
     : roomObj.participants;
 
-  //checking if all the participants has exclude a message at some point, if so get the first 'exclude message' obj
-  //and realy exclude all messages that were sended before this
+  //checking if all the participants has deleted a message at some point, if so get the first 'deleted message' obj
+  //and realy delete all messages that were sent before this
+
+  const index = roomObj.doNotShowMessagesBeforeDateToThisUsers.findIndex(
+    (el) => el.user === req.user._id.toString()
+  );
+
+  // checking if it's this user has alredy deleted a message before, if so we gonna replace the old obj by the new one
+  if (index > -1) {
+    roomObj.doNotShowMessagesBeforeDateToThisUsers[index] = obj;
+    roomFromDB.doNotShowMessagesBeforeDateToThisUsers[index] = {
+      date,
+      user: req.user._id,
+    };
+  } else {
+    roomObj.doNotShowMessagesBeforeDateToThisUsers.push(obj);
+    roomFromDB.doNotShowMessagesBeforeDateToThisUsers.push({
+      date,
+      user: req.user._id,
+    });
+  }
 
   const ids = roomObj.doNotShowMessagesBeforeDateToThisUsers.map(
     (obj) => obj.user
@@ -444,150 +277,23 @@ export const deleteMessagesUI = catchAsync(async (req, res, next) => {
     roomObj.messages = roomObj.messages.filter(
       (msg) => msg.sendedAt > firstDeletedMessage.date
     );
-  }
-
-  const index = roomObj.doNotShowMessagesBeforeDateToThisUsers.findIndex(
-    (el) => el.user === req.user._id.toString()
-  );
-
-  // checking if it's this user has alredy exclude a message before, if so we gonna replace the old obj by the new one
-  if (index > -1) roomObj.doNotShowMessagesBeforeDateToThisUsers[index] = obj;
-  else roomObj.doNotShowMessagesBeforeDateToThisUsers.push(obj);
-
-  await redis.set(req.params.room, JSON.stringify(roomObj));
-
-  res.status(204).json({
-    status: "success",
-    data: null,
-  });
-});
-
-export const deleteGroup = catchAsync(async (req, res, next) => {
-  const groupObj = await getRoomObj(req.params.room);
-  groupObj.participants.forEach(async (id) => {
-    try {
-      const userObj = await getUserObj(id);
-      const index = userObj.rooms.findIndex((room) => room === req.params.room);
-
-      if (index > -1) userObj.rooms.splice(index, 1);
-      await redis.set(id, JSON.stringify(userObj));
-    } catch (err) {
-      throw err;
-    }
-  });
-  redis.del(req.params.room);
-
-  res.status(204).json({
-    status: "success",
-    data: null,
-  });
-});
-
-export const getGroupParticipants = catchAsync(async (req, res, next) => {});
-
-export const selectNewGroupAdminAndLeave = catchAsync(
-  async (req, res, next) => {
-    const groupObj = await getRoomObj(req.body.room);
-    const userObj = await getUserObj(req.user._id.toString());
-
-    if (
-      req.user._id.toString() !== groupObj.createdBy &&
-      req.user._id.toString() !== groupObj.admin
-    )
-      return next(
-        new AppError("you do not have permission to perform this action!", 401)
-      );
-
-    const index = groupObj.participants.findIndex(
-      (el) => el === req.user._id.toString()
-    );
-    const indexTwo = userObj.rooms.findIndex((el) => el === req.body.room);
-
-    if (index > -1 && indexTwo > -1) {
-      groupObj.participants.splice(index, 1);
-      userObj.rooms.splice(indexTwo, 1);
-    } else {
-      return next(new AppError("you have alredy leaved this group", 400));
-    }
-
-    const newAdmin = req.body.newAdmin;
-    if (groupObj.participants.some((id) => id === newAdmin))
-      groupObj.admin = newAdmin;
-    else
-      return next(
-        new AppError(
-          "this participant that you have selected is not part of the group!",
-          400
-        )
-      );
-
-    await redis.set(req.body.room, JSON.stringify(groupObj));
-    await redis.set(req.user._id.toString(), JSON.stringify(userObj));
-
-    res.status(200).json({
-      status: "success",
-      data: groupObj,
+    const deleted = await Messages.deleteMany({
+      'room.roomId': req.params.room,
+      sendedAt: { $lt: firstDeletedMessage.date },
     });
-  }
-);
-
-export const leaveGroup = catchAsync(async (req, res, next) => {
-  const groupObj = await getRoomObj(req.params.room);
-  const userObj = await getUserObj(req.user._id.toString());
-
-  const index = groupObj.participants.findIndex(
-    (el) => el === req.user._id.toString()
-  );
-  const indexTwo = userObj.rooms.findIndex((el) => el === req.params.room);
-
-  if (index > -1 && indexTwo > -1) {
-    groupObj.participants.splice(index, 1);
-    userObj.rooms.splice(indexTwo, 1);
-  } else {
-    return next(new AppError("you have alredy leaved this group", 400));
+    console.log(
+      'todos as messagems antes de certa data foram deletadas, deletetObj:',
+      deleted
+    );
   }
 
-  await redis.set(req.body.room, JSON.stringify(groupObj));
-  await redis.set(req.user._id.toString(), JSON.stringify(userObj));
-
-  res.status(200).json({
-    status: "success",
-    data: groupObj,
-  });
-});
-
-export const blockUser = catchAsync(async (req, res, next) => {
-  const roomObj = await getRoomObj(req.params.room);
-  if (!roomObj.chatBlockedBy) roomObj.chatBlockedBy = [req.user._id.toString()];
-  else roomObj.chatBlockedBy.push(req.user._id.toString());
-
-  await redis.set(req.params.room, JSON.stringify(roomObj));
-
-  res.status(200).json({
-    status: "success",
-  });
-});
-
-export const getChat = catchAsync(async (req, res, next) => {
-  const chat = await getRoomObj(req.params.room);
-
-  res.status(200).json({
-    status: "success",
-    data: chat,
-  });
-});
-
-export const unblockUser = catchAsync(async (req, res, next) => {
-  const roomObj = await getRoomObj(req.params.room);
-  const index = roomObj.chatBlockedBy.findIndex(
-    (el) => el === req.user._id.toString()
-  );
-  index > -1 && roomObj.chatBlockedBy.splice(index, 1);
-
-  await redis.set(req.params.room, JSON.stringify(roomObj));
-
-  res.status(200).json({
-    status: "success",
+  await Promise.all([
+    roomFromDB.save(),
+    redis.set(req.params.room, JSON.stringify(roomObj), 'EX', 60 * 60 * 24 * 5),
+  ]);
+  res.status(204).json({
+    status: 'success',
+    data: null,
   });
 });
 
@@ -601,14 +307,31 @@ export const updateUserProfileImage = catchAsync(async (req, res, next) => {
   redisUser.image = req.file.filename;
   await Promise.all([
     user.save({ validateBeforeSave: false }),
-    redis.set(req.user._id.toString(), JSON.stringify(redisUser)),
+    redis.set(
+      req.user._id.toString(),
+      JSON.stringify(redisUser),
+      'EX',
+      60 * 60 * 24 * 5
+    ),
   ]);
 
   res.status(200).json({
-    status: "success",
+    status: 'success',
     data: {
       user,
       redisUser,
     },
+  });
+});
+
+export const getMoreMessages = catchAsync(async (req, res, next) => {
+  const messages = await Messages.find({
+    'room.roomId': req.params.room,
+    sendedAt: { $lt: req.query.date },
+  }).limit(100);
+
+  res.status(200).json({
+    status: 'success',
+    data: messages,
   });
 });

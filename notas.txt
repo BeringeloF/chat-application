@@ -10,4 +10,3 @@ do usuario//feito
 
 (opcional) implementar funcionalidade de envio de imagems, audio, video e outros arquivos
 (opcional) melhorar o UI
-

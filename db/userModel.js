@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
   googleId: {
     type: String,
     unique: true,
+    sparse: true,
   },
 
   email: {
@@ -20,12 +21,6 @@ const userSchema = new mongoose.Schema({
     unique: true,
     lowerCase: true,
     validate: [validator.isEmail, "Please provide a valid email"],
-  },
-
-  phone: {
-    type: String,
-    unique: true,
-    validate: [validator.isMobilePhone],
   },
   password: {
     type: String,
@@ -37,7 +32,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ["user", "guide", "lead-guide", "admin"],
+    enum: ["user", "admin"],
     default: "user",
   },
   photo: {
@@ -59,6 +54,88 @@ const userSchema = new mongoose.Schema({
     },
   },
 
+  createdAt: {
+    type: Date,
+    default: Date.now(),
+  },
+
+  chatNotifications: {
+    type: [
+      {
+        room: {
+          type: String,
+          required: true,
+        },
+        preview: {
+          type: String,
+          maxLength: 23,
+        },
+        sendedAt: {
+          type: Date,
+        },
+        triggeredBy: {
+          type: mongoose.Schema.ObjectId,
+          ref: "UserFromChatApp",
+          required: true,
+        },
+        targetUserId: {
+          type: String,
+        },
+        isFromGroup: {
+          type: Boolean,
+        },
+        groupData: {
+          type: mongoose.Schema.ObjectId,
+          ref: "GroupRoom",
+        },
+        totalMessages: {
+          type: Number,
+          required: true,
+        },
+      },
+    ],
+  },
+
+  serverNotifications: {
+    type: [
+      {
+        room: {
+          type: String,
+        },
+
+        sendedAt: {
+          type: Date,
+        },
+        triggeredBy: {
+          type: {
+            id: {
+              type: String,
+              required: true,
+            },
+            image: {
+              type: String,
+              required: true,
+            },
+            name: {
+              type: String,
+              required: true,
+            },
+          },
+          required: true,
+        },
+        context: {
+          type: String,
+          enum: ["invite to group", "invite to chat"],
+          required: true,
+        },
+        targetUserId: {
+          type: String,
+          required: true,
+        },
+      },
+    ],
+  },
+
   active: {
     type: Boolean,
     default: true,
@@ -71,6 +148,11 @@ const userSchema = new mongoose.Schema({
   },
   passwordResetExpires: Date,
 });
+
+userSchema.index(
+  { googleId: 1 },
+  { unique: true, partialFilterExpression: { googleId: { $type: "string" } } }
+);
 
 //quando trabalhamos como senhas nos nunca devemos deixalas amostra no dataBase por isso nos iremos criptogafar a senha antes de
 //salva-la no database
@@ -146,6 +228,6 @@ userSchema.methods.createPasswordResetToken = function () {
   return resetToken;
 };
 
-const User = new mongoose.model("User", userSchema);
+const User = new mongoose.model("UserFromChatApp", userSchema);
 
 export default User;

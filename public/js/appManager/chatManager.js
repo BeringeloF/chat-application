@@ -1,32 +1,33 @@
-import { viewNotification } from "../apiCalls/markNotificationsAsVisualized";
-import dropDownMenuMarkup from "../dropDownMenuMarkup";
-import { deleteMessages } from "../apiCalls/deleteMessages";
-import { blockUser, unblockUser } from "../apiCalls/blockUser";
-import xssFilters from "xss-filters";
+import { viewNotification } from '../apiCalls/markNotificationsAsVisualized';
+import dropDownMenuMarkup from '../dropDownMenuMarkup';
+import { deleteMessages } from '../apiCalls/deleteMessages';
+import { blockUser, unblockUser } from '../apiCalls/blockUser';
+import xssFilters from 'xss-filters';
+import { getMoreMessages } from '../apiCalls/getMoreMessages';
 
 class Chat {
-  #main = document.querySelector(".main-content");
+  #main = document.querySelector('.main-content');
   myId;
   async displayChat(socket, e) {
-    const el = e.target.closest(".user-item");
+    const el = e.target.closest('.user-item');
     if (
       !el ||
-      e.target.closest(".user-dropdown-trigger") ||
-      e.target.closest(".user-dropdown-content")
+      e.target.closest('.user-dropdown-trigger') ||
+      e.target.closest('.user-dropdown-content')
     )
       return;
 
     console.log(
       !el,
-      e.target.closest(".user-dropdown-trigger"),
-      e.target.closest(".user-dropdown-content")
+      e.target.closest('.user-dropdown-trigger'),
+      e.target.closest('.user-dropdown-content')
     );
 
-    const src = el.querySelector(".user-avatar").src;
-    const name = el.querySelector(".user-name").textContent;
-    const room = el.getAttribute("data-room");
-    const isGroup = room.includes("GROUP");
-    this.#main.innerHTML = "";
+    const src = el.querySelector('.user-avatar').src;
+    const name = el.querySelector('.user-name').textContent;
+    const room = el.getAttribute('data-room');
+    const isGroup = room.includes('GROUP');
+    this.#main.innerHTML = '';
 
     viewNotification(room);
 
@@ -40,39 +41,44 @@ class Chat {
           </div>
         `;
 
-    this.#main.insertAdjacentHTML("afterbegin", chatHeaderMarkup);
+    this.#main.insertAdjacentHTML('afterbegin', chatHeaderMarkup);
     this.#main
-      .querySelector("#delete-messages")
-      .addEventListener("click", this.#deleteMessages.bind(this));
+      .querySelector('#delete-messages')
+      .addEventListener('click', this.#deleteMessages.bind(this));
+    let res;
+    try {
+      res = await socket.timeout(5000).emitWithAck('join', room);
+    } catch (err) {
+      location.assign('/');
+    }
 
-    const res = await socket.timeout(5000).emitWithAck("join", room);
+    const blockUserEl = this.#main.querySelector('#block-user');
 
-    const blockUserEl = this.#main.querySelector("#block-user");
-
-    if (res.chatBlockedBy === "me") {
-      blockUserEl.id = "unblock-user";
+    if (res.chatBlockedBy === 'me') {
+      blockUserEl.id = 'unblock-user';
       blockUserEl.innerHTML = ` <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect width="7" height="7" x="14" y="3" rx="1"></rect>
           <path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"></path>
         </svg>
         Unblock User`;
-      blockUserEl.addEventListener("click", () => {
+      blockUserEl.addEventListener('click', () => {
         unblockUser(room);
       });
     } else {
-      blockUserEl?.addEventListener("click", () => {
+      blockUserEl?.addEventListener('click', () => {
         blockUser(room);
         setTimeout(() => {
-          location.assign("/");
+          location.assign('/');
         }, 4000);
       });
     }
 
-    if (res.status === "already joined") return;
+    if (res.status === 'already joined') return;
 
     let chatBoxMarkup = `
           <div class="chat-box"></div>
         `;
+
     if (res.data) {
       chatBoxMarkup = `
           <div class="chat-box">${this.#generatePreviousMessagesMarkup(
@@ -83,7 +89,17 @@ class Chat {
           `;
     }
 
-    this.#main.insertAdjacentHTML("beforeend", chatBoxMarkup);
+    this.#main.insertAdjacentHTML('beforeend', chatBoxMarkup);
+    const chatBox = document.querySelector('.chat-box');
+    chatBox.scrollTop = chatBox.scrollHeight + 80;
+    const observer = new MutationObserver(() => {
+      // Adicionando um pequeno atraso para garantir que o conteúdo esteja totalmente carregado
+      setTimeout(() => {
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }, 80); //
+    });
+
+    observer.observe(chatBox, { childList: true });
     const formMarkup = `
         <form class="input-box">
           <input type="text" placeholder="Type a message" id="input">
@@ -91,23 +107,52 @@ class Chat {
         </form>
        `;
 
-    this.#main.insertAdjacentHTML("beforeend", formMarkup);
-    const form = this.#main.querySelector(".input-box");
-    form.addEventListener("submit", this.#sendMessage.bind(this, socket));
+    this.#main.insertAdjacentHTML('beforeend', formMarkup);
+    const form = this.#main.querySelector('.input-box');
+    form.addEventListener('submit', this.#sendMessage.bind(this, socket));
+
+    const targetElement = document.querySelector('#targetElement');
+
+    // Cria um observer usando a API Intersection Observer
+    const observerI = new IntersectionObserver((entries) => {
+      entries.forEach(async (entry) => {
+        if (entry.isIntersecting) {
+          const date = chatBox.firstElementChild.dataset.date;
+          const messages = await getMoreMessages(room, date);
+          console.log(messages);
+          observerI.unobserve(entry.target);
+          entry.target.removeAttribute('id');
+          chatBox.insertAdjacentHTML(
+            'afterbegin',
+            this.#generatePreviousMessagesMarkup(messages, this.myId)
+          );
+          const newTargetElement = chatBox.querySelector('#targetElement');
+
+          // Verifica se o novo elemento existe antes de observá-lo
+          if (newTargetElement) {
+            observerI.observe(newTargetElement);
+          }
+        }
+      });
+    });
+
+    // Observa o elemento alvo
+    targetElement && observerI.observe(targetElement);
   }
 
   async #sendMessage(socket, e) {
     e.preventDefault();
-    const messages = document.querySelector(".chat-box");
-    const input = document.getElementById("input");
-    const chatHeader = document.querySelector(".chat-header");
+    const messages = document.querySelector('.chat-box');
+    const input = document.getElementById('input');
+    const chatHeader = document.querySelector('.chat-header');
     const message = xssFilters.inHTMLData(input.value);
     if (message.trim()) {
-      const room = chatHeader.getAttribute("data-room");
+      const room = chatHeader.getAttribute('data-room');
       try {
-        await socket.timeout(5000).emitWithAck("chat", message, room);
+        await socket.timeout(5000).emitWithAck('chat', message, room);
       } catch (err) {
-        console.error("error mine", err);
+        console.error('error mine', err);
+        window.location.reload();
       }
 
       const markup = `
@@ -117,19 +162,19 @@ class Chat {
             </div>
         </div>
       `;
-      messages.insertAdjacentHTML("beforeend", markup);
-      input.value = "";
+      messages.insertAdjacentHTML('beforeend', markup);
+      input.value = '';
     }
-    console.log("enviando");
+    console.log('enviando');
   }
 
   displayRecivedMessage(msg, callback) {
     callback({ arrived: true, id: this.myId });
-    const messages = document.querySelector(".chat-box");
+    const messages = document.querySelector('.chat-box');
     let markup;
 
     if (msg.isFromGroup) {
-      console.log("a messagem foi enviada de um grupo");
+      console.log('a messagem foi enviada de um grupo');
       console.log(msg);
       markup = `<div class="message received">
          <div>${msg.sendedBy.name}</div>
@@ -138,7 +183,7 @@ class Chat {
           </div>
       </div>`;
     } else {
-      console.log("a messagem não foi enviada de um grupo");
+      console.log('a messagem não foi enviada de um grupo');
       console.log(msg);
       markup = `
       <div class="message received">
@@ -149,17 +194,18 @@ class Chat {
     `;
     }
 
-    messages.insertAdjacentHTML("beforeend", markup);
+    messages.insertAdjacentHTML('beforeend', markup);
     window.scrollTo(0, document.body.scrollHeight);
   }
 
   #generatePreviousMessagesMarkup(messages, id, blockedBy) {
     console.log(messages);
+
     let alertMarkup;
 
     if (blockedBy) {
       alertMarkup =
-        blockedBy === "me"
+        blockedBy === 'me'
           ? `
   <div class="alert-message">
     <span class="icon">⚠️</span>
@@ -172,11 +218,12 @@ class Chat {
     <p>Você foi bloqueado por este usuário. Não será possível receber ou enviar mensagens deste usuário até que ele o desbloqueie!</p>
   </div>`;
     }
-
-    const markup = messages.map((msg) => {
+    const markup = messages.map((msg, i) => {
       if (msg.sendedBy.id === id) {
         return `
-    <div class="message sent">
+    <div class="message sent" ${
+      i === 20 && messages.length === 100 ? 'id="targetElement"' : ''
+    }  data-date="${msg.sendedAt}">
         <div class="text">
           ${msg.content}
         </div>
@@ -184,8 +231,10 @@ class Chat {
   `;
       }
       return `
-      <div class="message received">
-       ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ""}
+      <div class="message received"  ${
+        i === 20 && messages.length === 100 ? 'id="targetElement"' : ''
+      } data-date="${msg.sendedAt}">
+       ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ''}
           <div class="text">
             ${msg.content}
           </div>
@@ -199,7 +248,7 @@ class Chat {
   }
 
   async #deleteMessages() {
-    const room = document.querySelector(".chat-header").dataset.room;
+    const room = document.querySelector('.chat-header').dataset.room;
     deleteMessages(room);
   }
 }

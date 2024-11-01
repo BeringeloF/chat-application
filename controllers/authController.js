@@ -1,11 +1,13 @@
-import { promisify } from "util";
-import User from "../db/userModel.js";
-import catchAsync from "../helpers/catchAsync.js";
-import jwt from "jsonwebtoken";
-import { AppError } from "../helpers/appError.js";
-import crypto from "crypto";
-import { redis } from "./socketController.js";
-import xssFilters from "xss-filters";
+import { promisify } from 'util';
+import User from '../db/userModel.js';
+import catchAsync from '../helpers/catchAsync.js';
+import jwt from 'jsonwebtoken';
+import { AppError } from '../helpers/appError.js';
+
+import { redis } from './socketController.js';
+import xssFilters from 'xss-filters';
+import GroupRoom from '../db/groupRoomModel.js';
+import PrivateRoom from '../db/userToUserRoomModel.js';
 
 const singToken = (id, refresh = false) => {
   if (!refresh) {
@@ -16,7 +18,7 @@ const singToken = (id, refresh = false) => {
   }
 
   return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET, {
-    expiresIn: "7d",
+    expiresIn: '7d',
   });
 };
 
@@ -43,16 +45,16 @@ const createSendToken = function (user, statusCode, res, redirect = false) {
   };
 
   // if (process.env.NODE_ENV === 'production') cookieOptions.secure = true;
-  res.cookie("jwt", token, cookieOptions);
+  res.cookie('jwt', token, cookieOptions);
 
   user.password = undefined;
 
   if (redirect) {
-    res.redirect("/");
+    res.redirect('/');
   }
 
   res.status(statusCode).json({
-    status: "success",
+    status: 'success',
     token,
     data: {
       user,
@@ -68,20 +70,21 @@ export const singup = catchAsync(async (req, res, next) => {
     passwordConfirm: req.body.passwordConfirm,
   });
 
-  const resp = await redis.get(newUser._id.toString());
+  const userObj = {
+    name: newUser.name,
+    image: newUser.photo,
+    id: newUser._id.toString(),
+    rooms: [],
+    chatNotifications: [],
+    serverNotifications: [],
+  };
 
-  if (!resp) {
-    const userObj = {
-      name: newUser.name,
-      image: newUser.photo,
-      id: newUser._id.toString(),
-      rooms: [],
-      chatNotifications: [],
-      serverNotifications: [],
-    };
-
-    await redis.set(newUser._id, JSON.stringify(userObj));
-  }
+  await redis.set(
+    newUser._id.toString(),
+    JSON.stringify(userObj),
+    'EX',
+    60 * 60 * 24 * 5
+  );
 
   createSendToken(newUser, 201, res);
 });
@@ -91,27 +94,44 @@ export const login = catchAsync(async (req, res, next) => {
 
   //verify if email and password are exist
   if (!email || !password)
-    return next(new AppError("missing email or password!", 400));
+    return next(new AppError('missing email or password!', 400));
   console.log(email);
-  const user = await User.findOne({ email: email }).select("+password");
+  const user = await User.findOne({ email: email }).select('+password');
 
   //check if email exist and password is correct
   if (!user || !(await user.correctPassword(password, user.password)))
-    return next(new AppError("incorrect email or password!", 400));
+    return next(new AppError('incorrect email or password!', 400));
 
   const resp = await redis.get(user._id.toString());
 
+  //if user does not exist on redis, get the user data from mongoDB and save on redis
   if (!resp) {
+    const id = user._id;
+    const [groupRooms, privateRooms] = await Promise.all([
+      GroupRoom.find({ participants: new mongoose.Types.ObjectId(id) }),
+      PrivateRoom.find({
+        'participants.user': new mongoose.Types.ObjectId(id),
+      }),
+    ]);
+
     const userObj = {
       name: user.name,
       image: user.photo,
       id: user._id.toString(),
-      rooms: [],
-      chatNotifications: [],
-      serverNotifications: [],
+      rooms: [
+        ...groupRooms.map((el) => el._id),
+        ...privateRooms.map((el) => el._id),
+      ],
+      chatNotifications: user.chatNotifications,
+      serverNotifications: user.serverNotifications,
     };
 
-    await redis.set(user._id, JSON.stringify(userObj));
+    await redis.set(
+      user._id.toString(),
+      JSON.stringify(userObj),
+      'EX',
+      60 * 60 * 24 * 5
+    );
   }
   // if everything is correct send access token
   createSendToken(user, 200, res);
@@ -129,8 +149,8 @@ export const logout = catchAsync(async (req, res, next) => {
   };
 
   // if (process.env.NODE_ENV === 'production') cookieOptions.secure = true;
-  res.cookie("jwt", "logout", cookieOptions);
-  res.status(200).send("loging out");
+  res.cookie('jwt', 'logout', cookieOptions);
+  res.status(200).send('loging out');
 });
 
 export const protect = catchAsync(async (req, res, next) => {
@@ -139,7 +159,8 @@ export const protect = catchAsync(async (req, res, next) => {
   if (req.cookies.jwt) {
     token = req.cookies.jwt;
   }
-  if (!token) return res.redirect("/login");
+  if (!token) return res.redirect('/login');
+  console.log(token);
   //verification token
   //Aqui nos iremos verificar se o token e valido usando o verify que aceita como primeiro argumento o token e segundo o secret
   //E como terceiro argumento uma callback function que é executada assim que sua acao for finalizada ou seja este verify é um aync method
@@ -151,7 +172,7 @@ export const protect = catchAsync(async (req, res, next) => {
 
   if (!currentUser)
     return next(
-      new AppError("the user belonging to this token no loger exist", 401)
+      new AppError('the user belonging to this token no loger exist', 401)
     );
 
   //cheke if the user change password after the token was issued
@@ -161,7 +182,7 @@ export const protect = catchAsync(async (req, res, next) => {
 
   if (currentUser.changedPasswordAfter(decoded.iat))
     return next(
-      new AppError("User recently chanded password!, please log in again", 401)
+      new AppError('User recently chanded password!, please log in again', 401)
     );
 
   //granted access to the protected route
