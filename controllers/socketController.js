@@ -15,6 +15,7 @@ export const redis = new Redis({
 
 redis.on('error', (err) => {
   console.error('Erro ao conectar ao Redis:', err);
+  redis.quit();
 });
 
 export const createAndSendChatNotification = async (
