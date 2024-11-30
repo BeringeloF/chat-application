@@ -3,7 +3,7 @@ import User from '../db/userModel.js';
 import catchAsync from '../helpers/catchAsync.js';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../helpers/appError.js';
-
+import mongoose from 'mongoose';
 import { redis } from './socketController.js';
 import xssFilters from 'xss-filters';
 import GroupRoom from '../db/groupRoomModel.js';

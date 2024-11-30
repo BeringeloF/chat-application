@@ -6,7 +6,7 @@ import PrivateRoom from '../db/userToUserRoomModel.js';
 import GroupRoom from '../db/groupRoomModel.js';
 import Messages from '../db/messagesModel.js';
 
-export const redis = new Redis({
+export let redis = new Redis({
   host: process.env.REDIS_HOST, // Host do Redis
   port: process.env.REDIS_PORT, // Porta do Redis
   password: process.env.REDIS_PASSWORD, // Senha do Redis (se necessário)
@@ -16,6 +16,14 @@ export const redis = new Redis({
 redis.on('error', (err) => {
   console.error('Erro ao conectar ao Redis:', err);
   redis.quit();
+  redis = {
+    set() {
+      return false;
+    },
+    get() {
+      return false;
+    },
+  };
 });
 
 export const createAndSendChatNotification = async (
