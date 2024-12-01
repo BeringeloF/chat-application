@@ -22,9 +22,9 @@ export const getUserObj = async (id, next) => {
     return userObj;
   } catch (err) {
     console.error(err.message);
-    const user = await User.findById(id)
-      .populate('chatNotifications')
-      .populate('serverNotifications');
+    const user = await User.findById(id).populate(
+      'chatNotifications.triggeredBy'
+    );
 
     if (!user) {
       throw new AppError('user not found on data base', 404);
@@ -37,11 +37,8 @@ export const getUserObj = async (id, next) => {
       }),
     ]);
     console.log('grupos e chats do usuario: ' + id);
-    console.log(
-      util.inspect(groupRooms, { depth: 'Infinity' }),
-      util.inspect(privateRooms, { depth: 'Infinity' })
-    );
-    console.log('--------------------------------------');
+
+    console.log('USER FROM MONGODB', user);
 
     const userObj = {
       name: user.name,
@@ -54,6 +51,8 @@ export const getUserObj = async (id, next) => {
       chatNotifications: user.chatNotifications,
       serverNotifications: user.serverNotifications,
     };
+
+    console.log('USER FORMATED ON REDIS FORMAT', userObj);
 
     await redis.set(user._id, JSON.stringify(userObj), 'EX', 60 * 60 * 24 * 1);
     return userObj;

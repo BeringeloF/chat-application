@@ -68,6 +68,9 @@ class Notification {
     <span>Show more info</span>
   </div>
 </div>`;
+    console.log(notification.groupData);
+
+    console.log(notification);
     return `
          <li class="user-item" data-room="${notification.room}">
          

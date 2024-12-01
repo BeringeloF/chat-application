@@ -1,5 +1,6 @@
 import catchAsync from '../helpers/catchAsync.js';
 import { getUserObj, getRoomObj } from '../helpers/getObjFromRedis.js';
+import util from 'util';
 
 export const getHomePage = catchAsync(async (req, res) => {
   const userObj = await getUserObj(req.user._id);

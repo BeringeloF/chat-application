@@ -602,7 +602,6 @@ var _browserDefault = parcelHelpers.interopDefault(_browser);
 var _buffer = require("buffer");
 var _axios = require("axios");
 var _axiosDefault = parcelHelpers.interopDefault(_axios);
-// Tornar process e Buffer globais
 window.process = (0, _browserDefault.default);
 window.Buffer = (0, _buffer.Buffer);
 class App {
@@ -4479,6 +4478,8 @@ class Notification {
     <span>Show more info</span>
   </div>
 </div>`;
+        console.log(notification.groupData);
+        console.log(notification.triggeredBy);
         return `
          <li class="user-item" data-room="${notification.room}">
          
@@ -4544,7 +4545,7 @@ class Notification {
         if (!e.target.classList.contains("accept-invitation")) return;
         if (!e.target.dataset.userId) {
             const room = e.target.dataset.room;
-            const resJ = await fetch(`/api/v1/users/joinToGroup/${room}`);
+            const resJ = await fetch(`/api/v1/groups/joinToGroup/${room}`);
             const res = await resJ.json();
             console.log(res);
             await (0, _markNotificationsAsVisualizedJs.viewNotification)(room, true);
@@ -9566,7 +9567,7 @@ var _axiosDefault = parcelHelpers.interopDefault(_axios);
 const denyGroupInvitation = async (room)=>{
     const res = await (0, _axiosDefault.default)({
         method: "POST",
-        url: "/api/v1/users/denyGroupInvitation",
+        url: "/api/v1/groups/denyGroupInvitation",
         data: {
             room
         }
@@ -9584,7 +9585,7 @@ const acceptChatInvitation = async (id)=>{
     try {
         let res = await (0, _axiosDefault.default)({
             method: "POST",
-            url: "/api/v1/users/chat",
+            url: "/api/v1/chats",
             data: {
                 id
             }
@@ -9691,7 +9692,7 @@ class Group {
         const room = e.target.closest(".user-item").dataset.room;
         if (room.includes("CHAT") || !e.target.closest(".update-group")) return;
         console.log("displayUpdateGroupFrom was called");
-        const groupJson = await fetch(`/api/v1/users/group/${room}`);
+        const groupJson = await fetch(`/api/v1/groups/${room}`);
         const groupData = (await groupJson.json()).data;
         const res = await fetch("/api/v1/users/getContacts");
         const { data } = await res.json();
@@ -9754,7 +9755,7 @@ class Group {
             const room = e.target.closest(".user-item").dataset.room;
             if (room.includes("CHAT") || !e.target.closest(".show-info")) return;
             console.log(e.target);
-            const groupJson = await fetch(`/api/v1/users/group/${room}?getParticipantsObj=true`);
+            const groupJson = await fetch(`/api/v1/groups/${room}?getParticipantsObj=true`);
             const groupData = (await groupJson.json()).data;
             const creator = groupData.participants.filter((el)=>el.id === groupData.createdBy)[0] || await (0, _getUserJs.getUser)(groupData.createdBy);
             this.#main.innerHTML = "";
@@ -9810,7 +9811,7 @@ class Group {
         const room = e.target.closest(".user-item").dataset.room;
         if (room.includes("CHAT") || !e.target.closest(".leave-group")) return;
         const body = document.querySelector("body");
-        const groupJson = await fetch(`/api/v1/users/group/${room}?getParticipantsObj=true`);
+        const groupJson = await fetch(`/api/v1/groups/${room}?getParticipantsObj=true`);
         const groupData = (await groupJson.json()).data;
         const id = room.split("-")[1];
         let markup;
@@ -9895,7 +9896,7 @@ const updateGroup = async (data, socket, room)=>{
     try {
         const res = await (0, _axiosDefault.default)({
             method: "PATCH",
-            url: `/api/v1/users/group/${room}`,
+            url: `/api/v1/groups/${room}`,
             data
         });
         console.log(res);
@@ -9919,7 +9920,7 @@ var _axiosDefault = parcelHelpers.interopDefault(_axios);
 const createGroup = async (data, socket)=>{
     const res = await (0, _axiosDefault.default)({
         method: "POST",
-        url: "/api/v1/users/group",
+        url: "/api/v1/groups",
         data
     });
     console.log(res);
@@ -9942,7 +9943,7 @@ var _axiosDefault = parcelHelpers.interopDefault(_axios);
 const selectNewGroupAdminAndLeave = async (data)=>{
     const res = await (0, _axiosDefault.default)({
         method: "PATCH",
-        url: "/api/v1/users/selectNewGroupAdminAndLeave",
+        url: "/api/v1/groups/selectNewGroupAdminAndLeave",
         data
     });
     console.log(res);
@@ -9950,7 +9951,7 @@ const selectNewGroupAdminAndLeave = async (data)=>{
 const leaveGroup = async (room)=>{
     const res = await (0, _axiosDefault.default)({
         method: "PATCH",
-        url: `/api/v1/users/leaveGroup/${room}`
+        url: `/api/v1/groups/leaveGroup/${room}`
     });
     console.log(res);
 };
@@ -9978,6 +9979,7 @@ var _deleteMessages = require("../apiCalls/deleteMessages");
 var _blockUser = require("../apiCalls/blockUser");
 var _xssFilters = require("xss-filters");
 var _xssFiltersDefault = parcelHelpers.interopDefault(_xssFilters);
+var _getMoreMessages = require("../apiCalls/getMoreMessages");
 class Chat {
     #main = document.querySelector(".main-content");
     myId;
@@ -10001,7 +10003,12 @@ class Chat {
         `;
         this.#main.insertAdjacentHTML("afterbegin", chatHeaderMarkup);
         this.#main.querySelector("#delete-messages").addEventListener("click", this.#deleteMessages.bind(this));
-        const res = await socket.timeout(5000).emitWithAck("join", room);
+        let res;
+        try {
+            res = await socket.timeout(5000).emitWithAck("join", room);
+        } catch (err) {
+            location.assign("/");
+        }
         const blockUserEl = this.#main.querySelector("#block-user");
         if (res.chatBlockedBy === "me") {
             blockUserEl.id = "unblock-user";
@@ -10028,7 +10035,16 @@ class Chat {
           `;
         this.#main.insertAdjacentHTML("beforeend", chatBoxMarkup);
         const chatBox = document.querySelector(".chat-box");
-        chatBox.scrollTop = chatBox.scrollHeight;
+        chatBox.scrollTop = chatBox.scrollHeight + 80;
+        const observer = new MutationObserver(()=>{
+            // Adicionando um pequeno atraso para garantir que o conteúdo esteja totalmente carregado
+            setTimeout(()=>{
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }, 80); //
+        });
+        observer.observe(chatBox, {
+            childList: true
+        });
         const formMarkup = `
         <form class="input-box">
           <input type="text" placeholder="Type a message" id="input">
@@ -10038,6 +10054,25 @@ class Chat {
         this.#main.insertAdjacentHTML("beforeend", formMarkup);
         const form = this.#main.querySelector(".input-box");
         form.addEventListener("submit", this.#sendMessage.bind(this, socket));
+        const targetElement = document.querySelector("#targetElement");
+        // Cria um observer usando a API Intersection Observer
+        const observerI = new IntersectionObserver((entries)=>{
+            entries.forEach(async (entry)=>{
+                if (entry.isIntersecting) {
+                    const date = chatBox.firstElementChild.dataset.date;
+                    const messages = await (0, _getMoreMessages.getMoreMessages)(room, date);
+                    console.log(messages);
+                    observerI.unobserve(entry.target);
+                    entry.target.removeAttribute("id");
+                    chatBox.insertAdjacentHTML("afterbegin", this.#generatePreviousMessagesMarkup(messages, this.myId));
+                    const newTargetElement = chatBox.querySelector("#targetElement");
+                    // Verifica se o novo elemento existe antes de observá-lo
+                    if (newTargetElement) observerI.observe(newTargetElement);
+                }
+            });
+        });
+        // Observa o elemento alvo
+        targetElement && observerI.observe(targetElement);
     }
     async #sendMessage(socket, e) {
         e.preventDefault();
@@ -10108,16 +10143,16 @@ class Chat {
     <span class="icon">\u{26A0}\u{FE0F}</span>
     <p>Voc\xea foi bloqueado por este usu\xe1rio. N\xe3o ser\xe1 poss\xedvel receber ou enviar mensagens deste usu\xe1rio at\xe9 que ele o desbloqueie!</p>
   </div>`;
-        const markup = messages.map((msg)=>{
+        const markup = messages.map((msg, i)=>{
             if (msg.sendedBy.id === id) return `
-    <div class="message sent">
+    <div class="message sent" ${i === 20 && messages.length === 100 ? 'id="targetElement"' : ""}  data-date="${msg.sendedAt}">
         <div class="text">
           ${msg.content}
         </div>
     </div>
   `;
             return `
-      <div class="message received">
+      <div class="message received"  ${i === 20 && messages.length === 100 ? 'id="targetElement"' : ""} data-date="${msg.sendedAt}">
        ${msg.isFromGroup ? `<div>${msg.sendedBy.name}</div>` : ""}
           <div class="text">
             ${msg.content}
@@ -10135,7 +10170,7 @@ class Chat {
 }
 exports.default = new Chat();
 
-},{"../dropDownMenuMarkup":"fCxFf","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../apiCalls/blockUser":"8csVB","../apiCalls/markNotificationsAsVisualized":"4SFvT","../apiCalls/deleteMessages":"bT0rf","xss-filters":"fuEAa"}],"fCxFf":[function(require,module,exports) {
+},{"../dropDownMenuMarkup":"fCxFf","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","../apiCalls/blockUser":"8csVB","../apiCalls/markNotificationsAsVisualized":"4SFvT","../apiCalls/deleteMessages":"bT0rf","xss-filters":"fuEAa","../apiCalls/getMoreMessages":"esgdY"}],"fCxFf":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 const dropDownMenuMarkup = (isGroup)=>{
@@ -10214,14 +10249,14 @@ var _axios = require("axios");
 var _axiosDefault = parcelHelpers.interopDefault(_axios);
 const blockUser = async (room)=>{
     const res = await (0, _axiosDefault.default)({
-        url: `/api/v1/users/blockUser/${room}`,
+        url: `/api/v1/chats/blockUser/${room}`,
         method: "PATCH"
     });
     console.log(res);
 };
 const unblockUser = async (room)=>{
     const res = await (0, _axiosDefault.default)({
-        url: `/api/v1/users/unblockUser/${room}`,
+        url: `/api/v1/chats/unblockUser/${room}`,
         method: "PATCH"
     });
     console.log(res);
@@ -10234,11 +10269,15 @@ parcelHelpers.export(exports, "deleteMessages", ()=>deleteMessages);
 var _axios = require("axios");
 var _axiosDefault = parcelHelpers.interopDefault(_axios);
 const deleteMessages = async (room)=>{
-    const res = await (0, _axiosDefault.default)({
-        method: "DELETE",
-        url: `/api/v1/users/deleteMessages/${room}`
-    });
-    console.log(res);
+    try {
+        const res = await (0, _axiosDefault.default)({
+            method: "DELETE",
+            url: `/api/v1/users/deleteMessages/${room}`
+        });
+        console.log(res);
+    } catch (err) {
+        console.error(err);
+    }
 };
 
 },{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"fuEAa":[function(require,module,exports) {
@@ -11199,7 +11238,21 @@ function uriInAttr(s, yav, yu) {
 * @alias module:xss-filters#uriComponentInHTMLComment
 */ exports.uriFragmentInHTMLComment = exports.uriComponentInHTMLComment;
 
-},{}],"creMx":[function(require,module,exports) {
+},{}],"esgdY":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "getMoreMessages", ()=>getMoreMessages);
+var _axios = require("axios");
+var _axiosDefault = parcelHelpers.interopDefault(_axios);
+const getMoreMessages = async (room, date)=>{
+    const res = await (0, _axiosDefault.default)({
+        method: "GET",
+        url: `/api/v1/users/getMoreMessages/${room}?date=${date}`
+    });
+    return res.data.data;
+};
+
+},{"axios":"jo6P5","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"creMx":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "updateUserProfileImage", ()=>updateUserProfileImage);

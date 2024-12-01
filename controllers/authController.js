@@ -96,7 +96,9 @@ export const login = catchAsync(async (req, res, next) => {
   if (!email || !password)
     return next(new AppError('missing email or password!', 400));
   console.log(email);
-  const user = await User.findOne({ email: email }).select('+password');
+  const user = await User.findOne({ email: email })
+    .select('+password')
+    .populate('chatNotifications.triggeredBy');
 
   //check if email exist and password is correct
   if (!user || !(await user.correctPassword(password, user.password)))

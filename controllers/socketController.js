@@ -2,8 +2,6 @@ import User from '../db/userModel.js';
 import Redis from 'ioredis';
 import { getUserObj, getRoomObj } from '../helpers/getObjFromRedis.js';
 import xssFilters from 'xss-filters';
-import PrivateRoom from '../db/userToUserRoomModel.js';
-import GroupRoom from '../db/groupRoomModel.js';
 import Messages from '../db/messagesModel.js';
 
 export let redis = new Redis({
