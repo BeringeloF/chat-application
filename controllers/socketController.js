@@ -26,6 +26,13 @@ redis.on('error', (err) => {
   };
 });
 
+redis.on('connect', async () => {
+  console.log('Redis conectado!');
+  console.log(
+    `Conectado ao Redis em ${redis.options.host}:${redis.options.port}`
+  );
+});
+
 export const createAndSendChatNotification = async (
   userId,
   targetUserId,
