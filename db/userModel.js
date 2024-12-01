@@ -1,12 +1,12 @@
-import mongoose from "mongoose";
-import crypto from "crypto";
-import validator from "validator";
-import bcrypt from "bcryptjs";
+import mongoose from 'mongoose';
+import crypto from 'crypto';
+import validator from 'validator';
+import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, "Please provid a name"],
+    required: [true, 'Please provid a name'],
   },
 
   googleId: {
@@ -17,10 +17,10 @@ const userSchema = new mongoose.Schema({
 
   email: {
     type: String,
-    required: [true, "Please provid an email"],
+    required: [true, 'Please provid an email'],
     unique: true,
     lowerCase: true,
-    validate: [validator.isEmail, "Please provide a valid email"],
+    validate: [validator.isEmail, 'Please provide a valid email'],
   },
   password: {
     type: String,
@@ -32,12 +32,12 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ["user", "admin"],
-    default: "user",
+    enum: ['user', 'admin'],
+    default: 'user',
   },
   photo: {
     type: String,
-    default: "default.jpg",
+    default: 'default.jpg',
   },
 
   passwordConfirm: {
@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema({
       validator: function (val) {
         return this.password === val;
       },
-      message: "Passwords are not the same!",
+      message: 'Passwords are not the same!',
     },
   },
 
@@ -75,7 +75,7 @@ const userSchema = new mongoose.Schema({
         },
         triggeredBy: {
           type: mongoose.Schema.ObjectId,
-          ref: "UserFromChatApp",
+          ref: 'UserFromChatApp',
           required: true,
         },
         targetUserId: {
@@ -86,7 +86,7 @@ const userSchema = new mongoose.Schema({
         },
         groupData: {
           type: mongoose.Schema.ObjectId,
-          ref: "GroupRoom",
+          ref: 'GroupRoom',
         },
         totalMessages: {
           type: Number,
@@ -125,7 +125,7 @@ const userSchema = new mongoose.Schema({
         },
         context: {
           type: String,
-          enum: ["invite to group", "invite to chat"],
+          enum: ['invite to group', 'invite to chat'],
           required: true,
         },
         targetUserId: {
@@ -151,16 +151,16 @@ const userSchema = new mongoose.Schema({
 
 userSchema.index(
   { googleId: 1 },
-  { unique: true, partialFilterExpression: { googleId: { $type: "string" } } }
+  { unique: true, partialFilterExpression: { googleId: { $type: 'string' } } }
 );
 
 //quando trabalhamos como senhas nos nunca devemos deixalas amostra no dataBase por isso nos iremos criptogafar a senha antes de
 //salva-la no database
 //Para isso nos usamos um algoritomo para  criptogafar neste caso o bcript
-userSchema.pre("save", async function (next) {
+userSchema.pre('save', async function (next) {
   //em todo documento nos temos acesso a uma propriedade chamada isModified() que diz se documeto foi modificado
 
-  if (!this.isModified("password")) next();
+  if (!this.isModified('password')) next();
   //é aqui onde é feito a criptografia da senha, nos usamo hash que aceita como primeiro parametro a string e como segundo
   //pode pode ser dizer o nivel da criptografia que é padra ser 10 quanto maior o numero melhor a segurança mais tambem
   //vai necessitar mais uso do cpu
@@ -172,8 +172,8 @@ userSchema.pre("save", async function (next) {
 });
 
 //middleware para setar o horario de modificaçao da senha
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password") || this.isNew) return next();
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password') || this.isNew) return next();
 
   //Aqui nos usamos menos 1000 ms pois, o servidor pode demorar um tempo para chegar ate esta parte, emtao para que o codigo funcione corrretamente
   //Nos tiramos um segundo para garantir
@@ -217,17 +217,17 @@ userSchema.methods.createPasswordResetToken = function () {
   //Por nao ser realmente uma senha nos nao precisamos criar uma cryptografia muito forte entao podemos criar este token com built in module crypto
   //Porem por este token funcionar como uma especie de senha ainda não é bom deixar amostra sem protecao estao iremo cryptografa-lo ainda
 
-  const resetToken = crypto.randomBytes(32).toString("hex");
+  const resetToken = crypto.randomBytes(32).toString('hex');
 
   this.passwordResetToken = crypto
-    .createHash("sha256")
+    .createHash('sha256')
     .update(resetToken)
-    .digest("hex");
+    .digest('hex');
   this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
 
   return resetToken;
 };
 
-const User = new mongoose.model("UserFromChatApp", userSchema);
+const User = new mongoose.model('UserFromChatApp', userSchema);
 
 export default User;

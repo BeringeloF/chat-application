@@ -22,7 +22,9 @@ export const getUserObj = async (id, next) => {
     return userObj;
   } catch (err) {
     console.error(err.message);
-    const user = await User.findById(id);
+    const user = await User.findById(id)
+      .populate('chatNotifications')
+      .populate('serverNotifications');
 
     if (!user) {
       throw new AppError('user not found on data base', 404);
